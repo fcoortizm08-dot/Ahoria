@@ -1,6 +1,8 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { Sidebar } from '@/components/layout/Sidebar'
+import { Toasts } from '@/components/common/Toasts'
+import { ProfileLoader } from '@/components/common/ProfileLoader'
 
 export default async function DashboardLayout({
   children,
@@ -20,12 +22,14 @@ export default async function DashboardLayout({
 
   return (
     <div className="min-h-screen bg-[#07090f] flex">
+      <ProfileLoader profile={profile} />
       <Sidebar profile={profile} />
       <main className="flex-1 ml-[210px] flex flex-col min-h-screen">
         <div className="flex-1 p-7 max-w-[1400px] w-full mx-auto">
           {children}
         </div>
       </main>
+      <Toasts />
     </div>
   )
 }
