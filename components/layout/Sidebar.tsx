@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
-import type { Profile } from '@/types'
+import { useFinanceStore } from '@/store/useFinanceStore'
 
 const NAV_ITEMS = [
   { href: '/dashboard', icon: '⊞', label: 'Dashboard',  group: 'principal' },
@@ -15,9 +15,10 @@ const NAV_ITEMS = [
   { href: '/settings',  icon: '⚙', label: 'Ajustes',    group: 'cuenta'    },
 ]
 
-export function Sidebar({ profile }: { profile: Profile | null }) {
+export function Sidebar() {
   const pathname = usePathname()
   const router = useRouter()
+  const profile = useFinanceStore(s => s.profile)
 
   const handleLogout = async () => {
     const supabase = createClient()
@@ -36,7 +37,7 @@ export function Sidebar({ profile }: { profile: Profile | null }) {
   ]
 
   return (
-    <aside className="w-[210px] bg-[#0d1117] border-r border-[#1e2d45] flex flex-col fixed top-0 left-0 bottom-0 z-50 py-4 px-2.5 overflow-y-auto">
+    <aside className="hidden md:flex w-[210px] bg-[#0d1117] border-r border-[#1e2d45] flex-col fixed top-0 left-0 bottom-0 z-50 py-4 px-2.5 overflow-y-auto">
 
       <div className="flex items-center gap-2.5 px-2 pb-4 mb-2 border-b border-[#1e2d45]">
         <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-xs flex-shrink-0">
