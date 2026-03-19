@@ -6,18 +6,13 @@ import { BottomNav } from '@/components/layout/BottomNav'
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen bg-[#060d17] flex">
-      {/* Sidebar — solo desktop */}
+    <div className="min-h-screen flex" style={{ backgroundColor: '#070e0a' }}>
       <Sidebar />
-
-      {/* Contenido principal */}
-      <main className="flex-1 md:ml-[210px] min-w-0">
+      <main className="flex-1 md:ml-[220px] min-w-0">
         <div className="max-w-2xl mx-auto px-4 py-6">
           {children}
         </div>
       </main>
-
-      {/* Utilidades globales */}
       <ProfileLoader />
       <Toasts />
       <FAB />
