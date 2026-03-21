@@ -10,20 +10,57 @@ export function MonthSelector() {
   const isCurrentMonth = activeYear === now.getFullYear() && activeMonth === now.getMonth()
 
   return (
-    <div className="flex items-center gap-2">
+    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
       <button
         onClick={goToPrevMonth}
-        className="w-7 h-7 rounded-lg bg-[#1e2d45] hover:bg-[#2a3f5f] text-slate-300 text-sm flex items-center justify-center transition-all"
+        style={{
+          width: '28px',
+          height: '28px',
+          borderRadius: '8px',
+          border: '1px solid #E5E7EB',
+          backgroundColor: '#FFFFFF',
+          color: '#6B7280',
+          fontSize: '14px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: 'pointer',
+          transition: 'all 0.15s ease',
+        }}
+        onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#F3F4F6' }}
+        onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#FFFFFF' }}
       >
         ‹
       </button>
-      <span className="text-sm font-semibold text-white min-w-[130px] text-center">
+      <span style={{
+        fontSize: '13px',
+        fontWeight: 600,
+        color: '#374151',
+        minWidth: '140px',
+        textAlign: 'center',
+      }}>
         {MONTHS[activeMonth]} {activeYear}
       </span>
       <button
         onClick={goToNextMonth}
         disabled={isCurrentMonth}
-        className="w-7 h-7 rounded-lg bg-[#1e2d45] hover:bg-[#2a3f5f] text-slate-300 text-sm flex items-center justify-center transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+        style={{
+          width: '28px',
+          height: '28px',
+          borderRadius: '8px',
+          border: '1px solid #E5E7EB',
+          backgroundColor: '#FFFFFF',
+          color: '#6B7280',
+          fontSize: '14px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: isCurrentMonth ? 'not-allowed' : 'pointer',
+          opacity: isCurrentMonth ? 0.4 : 1,
+          transition: 'all 0.15s ease',
+        }}
+        onMouseEnter={e => { if (!isCurrentMonth) (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#F3F4F6' }}
+        onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#FFFFFF' }}
       >
         ›
       </button>

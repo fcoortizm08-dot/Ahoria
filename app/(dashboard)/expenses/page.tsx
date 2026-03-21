@@ -7,36 +7,45 @@ import { useFinanceStore } from '@/store/useFinanceStore'
 import { MonthSelector } from '@/components/common/MonthSelector'
 import type { Transaction, Category } from '@/types'
 
+const C = {
+  bg: '#F7F8FA', surface: '#FFFFFF', border: '#E5E7EB',
+  green: '#10B981', greenBg: '#ECFDF5',
+  red: '#EF4444', redBg: '#FEF2F2',
+  text: '#111827', muted: '#6B7280', tertiary: '#9CA3AF',
+}
+
+const inputStyle: React.CSSProperties = {
+  width: '100%', padding: '9px 12px',
+  border: `1px solid ${C.border}`, borderRadius: '8px',
+  backgroundColor: '#FFFFFF', color: C.text,
+  fontSize: '13px', outline: 'none',
+  transition: 'border-color 0.15s ease',
+}
+
+const labelStyle: React.CSSProperties = {
+  display: 'block', fontSize: '12px',
+  fontWeight: 600, color: C.muted, marginBottom: '6px',
+}
+
 interface CategoryGroup {
   category: Category | null
   transactions: Transaction[]
   total: number
 }
 
-interface InlineForm {
-  description: string
-  amount: string
-  date: string
-  notes: string
-}
-
-const EMPTY_FORM: InlineForm = {
-  description: '',
-  amount: '',
+const EMPTY_FORM = {
+  description: '', amount: '',
   date: new Date().toISOString().split('T')[0],
-  notes: '',
+  notes: '', category_id: '',
 }
 
 export default function ExpensesPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  // activeFormCatKey = category id (or 'null' for sin categoría) de la sección con formulario abierto
-  const [activeFormCatKey, setActiveFormCatKey] = useState<string | null>(null)
-  const [inlineForm, setInlineForm] = useState<InlineForm>(EMPTY_FORM)
+  const [showForm, setShowForm] = useState(false)
+  const [form, setForm] = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
-  // qué secciones están colapsadas
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
   const { activeYear, activeMonth, addToast } = useFinanceStore()
 
   const fetchData = useCallback(async () => {
@@ -46,7 +55,7 @@ export default function ExpensesPage() {
     if (!user) return
 
     const start = new Date(activeYear, activeMonth, 1).toISOString().split('T')[0]
-    const end = new Date(activeYear, activeMonth + 1, 0).toISOString().split('T')[0]
+    const end   = new Date(activeYear, activeMonth + 1, 0).toISOString().split('T')[0]
 
     const [{ data: txs }, { data: cats }] = await Promise.all([
       supabase.from('transactions').select('*, category:categories(*)')
@@ -63,65 +72,39 @@ export default function ExpensesPage() {
   useEffect(() => { fetchData() }, [fetchData])
 
   const total = transactions.reduce((s, t) => s + t.amount, 0)
+  const daysInMonth = new Date(activeYear, activeMonth + 1, 0).getDate()
+  const dailyAvg = total / daysInMonth
 
-  // Agrupar por categoría
+  // Group by category
   const groups: CategoryGroup[] = (() => {
     const map = new Map<string, CategoryGroup>()
-
     transactions.forEach(tx => {
       const key = tx.category_id ?? 'null'
-      if (!map.has(key)) {
-        map.set(key, { category: tx.category ?? null, transactions: [], total: 0 })
-      }
+      if (!map.has(key)) map.set(key, { category: tx.category ?? null, transactions: [], total: 0 })
       const g = map.get(key)!
       g.transactions.push(tx)
       g.total += tx.amount
     })
-
     return Array.from(map.values()).sort((a, b) => b.total - a.total)
   })()
 
-  const toggleCollapse = (key: string) => {
-    setCollapsed(prev => {
-      const next = new Set(prev)
-      if (next.has(key)) next.delete(key)
-      else next.add(key)
-      return next
-    })
-  }
-
-  const openForm = (catKey: string) => {
-    setActiveFormCatKey(catKey)
-    setInlineForm(EMPTY_FORM)
-  }
-
-  const closeForm = () => {
-    setActiveFormCatKey(null)
-    setInlineForm(EMPTY_FORM)
-  }
-
-  const handleSubmit = async (e: React.FormEvent, categoryId: string | null) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setSaving(true)
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
-
     const { error } = await supabase.from('transactions').insert({
-      user_id: user.id,
-      type: 'expense',
-      description: inlineForm.description,
-      amount: Number(inlineForm.amount),
-      category_id: categoryId,
-      date: inlineForm.date,
-      notes: inlineForm.notes || null,
-      is_recurring: false,
+      user_id: user.id, type: 'expense',
+      description: form.description, amount: Number(form.amount),
+      category_id: form.category_id || null, date: form.date,
+      notes: form.notes || null, is_recurring: false,
     })
-
     if (error) { addToast('Error al guardar el gasto', 'error') }
     else {
       addToast('Gasto registrado correctamente')
-      closeForm()
+      setForm(EMPTY_FORM)
+      setShowForm(false)
       fetchData()
     }
     setSaving(false)
@@ -135,35 +118,211 @@ export default function ExpensesPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div style={{ padding: '32px 40px', maxWidth: '1200px', margin: '0 auto' }}>
+
       {/* Header */}
-      <div className="flex items-start justify-between gap-4 flex-wrap">
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '24px' }}>
         <div>
-          <h1 className="text-xl font-extrabold text-white">Gastos</h1>
-          <p className="text-slate-400 text-sm mt-0.5">
-            Total: <span className="text-red-400 font-semibold">{formatCurrency(total)}</span>
-            {groups.length > 0 && <> · {groups.length} categoría{groups.length !== 1 ? 's' : ''}</>}
+          <h1 style={{ fontSize: '22px', fontWeight: 800, color: C.text, margin: 0 }}>Gastos</h1>
+          <p style={{ fontSize: '13px', color: C.muted, marginTop: '4px' }}>
+            Total del mes:{' '}
+            <span style={{ color: C.red, fontWeight: 700 }}>{formatCurrency(total)}</span>
+            {groups.length > 0 && ` · ${groups.length} categoría${groups.length !== 1 ? 's' : ''}`}
           </p>
         </div>
-        <MonthSelector />
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <MonthSelector />
+          <button
+            onClick={() => setShowForm(!showForm)}
+            style={{
+              backgroundColor: C.red, color: '#FFFFFF',
+              padding: '8px 16px', borderRadius: '8px',
+              fontSize: '13px', fontWeight: 600, border: 'none',
+              cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px',
+              boxShadow: '0 2px 4px rgba(239,68,68,0.25)',
+            }}
+          >
+            + Agregar gasto
+          </button>
+        </div>
       </div>
 
-      {/* Contenido */}
-      {isLoading ? (
-        <div className="flex flex-col gap-3">
-          {[1,2,3].map(i => <div key={i} className="h-16 bg-[#0d1117] rounded-xl border border-[#1e2d45] animate-pulse" />)}
+      {/* KPI row */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '24px' }}>
+        {[
+          { label: 'Total del mes', value: formatCurrency(total), color: C.red },
+          { label: 'Categorías activas', value: `${groups.length}`, color: C.text },
+          { label: 'Promedio diario', value: formatCurrency(Math.round(dailyAvg)), color: C.muted },
+        ].map(kpi => (
+          <div key={kpi.label} style={{
+            backgroundColor: C.surface, border: `1px solid ${C.border}`,
+            borderRadius: '12px', padding: '20px 24px',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+          }}>
+            <div style={{ fontSize: '11px', fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>
+              {kpi.label}
+            </div>
+            <div style={{ fontSize: '22px', fontWeight: 800, color: kpi.color }}>{kpi.value}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Category breakdown */}
+      {groups.length > 0 && (
+        <div style={{
+          backgroundColor: C.surface, border: `1px solid ${C.border}`,
+          borderRadius: '12px', padding: '24px',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+          marginBottom: '24px',
+        }}>
+          <h3 style={{ fontSize: '14px', fontWeight: 700, color: C.text, marginTop: 0, marginBottom: '16px' }}>
+            Por categoría
+          </h3>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '12px' }}>
+            {groups.map(g => {
+              const pct = total > 0 ? Math.round((g.total / total) * 100) : 0
+              return (
+                <div key={g.category?.id ?? 'null'} style={{
+                  padding: '14px', borderRadius: '10px',
+                  border: `1px solid ${C.border}`,
+                  backgroundColor: (g.category?.color ?? '#6B7280') + '08',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                    <span style={{ fontSize: '18px' }}>{g.category?.icon ?? '📦'}</span>
+                    <span style={{ fontSize: '12px', fontWeight: 600, color: C.text, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {g.category?.name ?? 'Sin categoría'}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: '16px', fontWeight: 800, color: C.red, marginBottom: '6px' }}>
+                    {formatCurrency(g.total)}
+                  </div>
+                  <div style={{ height: '3px', backgroundColor: '#E5E7EB', borderRadius: '999px' }}>
+                    <div style={{
+                      height: '3px', borderRadius: '999px',
+                      backgroundColor: g.category?.color ?? '#6B7280',
+                      width: `${pct}%`,
+                    }} />
+                  </div>
+                  <div style={{ fontSize: '10px', color: C.tertiary, marginTop: '3px' }}>{pct}% del total</div>
+                </div>
+              )
+            })}
+          </div>
         </div>
-      ) : groups.length === 0 ? (
-        <div className="bg-[#0d1117] rounded-xl border border-[#1e2d45] p-12 text-center">
-          <p className="text-3xl mb-3">💸</p>
-          <p className="text-slate-400 text-sm mb-3">No hay gastos en este mes.</p>
-          {/* Botones de categorías para agregar rápido */}
-          <div className="flex flex-wrap gap-2 justify-center mt-4">
+      )}
+
+      {/* Add form */}
+      {showForm && (
+        <div style={{
+          backgroundColor: C.surface, border: `1px solid ${C.border}`,
+          borderRadius: '12px', padding: '24px',
+          boxShadow: '0 4px 16px rgba(0,0,0,0.08)',
+          marginBottom: '24px',
+        }}>
+          <h2 style={{ fontSize: '15px', fontWeight: 700, color: C.text, marginTop: 0, marginBottom: '20px' }}>
+            Nuevo gasto
+          </h2>
+          <form onSubmit={handleSubmit}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+              <div style={{ gridColumn: '1 / -1' }}>
+                <label style={labelStyle}>Descripción *</label>
+                <input
+                  value={form.description}
+                  onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+                  required placeholder="Ej: Supermercado" autoFocus
+                  style={inputStyle}
+                />
+              </div>
+              <div>
+                <label style={labelStyle}>Monto (CLP) *</label>
+                <input
+                  type="number" value={form.amount}
+                  onChange={e => setForm(f => ({ ...f, amount: e.target.value }))}
+                  required min="1" placeholder="15000"
+                  style={inputStyle}
+                />
+              </div>
+              <div>
+                <label style={labelStyle}>Fecha *</label>
+                <input
+                  type="date" value={form.date}
+                  onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
+                  required style={inputStyle}
+                />
+              </div>
+              <div>
+                <label style={labelStyle}>Categoría</label>
+                <select
+                  value={form.category_id}
+                  onChange={e => setForm(f => ({ ...f, category_id: e.target.value }))}
+                  style={inputStyle}
+                >
+                  <option value="">Sin categoría</option>
+                  {categories.map(c => (
+                    <option key={c.id} value={c.id}>{c.icon} {c.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label style={labelStyle}>Notas</label>
+                <input
+                  value={form.notes}
+                  onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
+                  placeholder="Opcional"
+                  style={inputStyle}
+                />
+              </div>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <button
+                type="button" onClick={() => setShowForm(false)}
+                style={{
+                  padding: '8px 16px', borderRadius: '8px', fontSize: '13px',
+                  fontWeight: 500, color: C.muted, border: `1px solid ${C.border}`,
+                  backgroundColor: 'transparent', cursor: 'pointer',
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit" disabled={saving}
+                style={{
+                  padding: '8px 20px', borderRadius: '8px', fontSize: '13px',
+                  fontWeight: 600, color: '#FFFFFF', backgroundColor: C.red,
+                  border: 'none', cursor: 'pointer', opacity: saving ? 0.6 : 1,
+                }}
+              >
+                {saving ? 'Guardando...' : 'Guardar gasto'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Transaction list */}
+      {isLoading ? (
+        <div style={{ backgroundColor: C.surface, border: `1px solid ${C.border}`, borderRadius: '12px', padding: '40px', textAlign: 'center', color: C.tertiary, fontSize: '14px' }}>
+          Cargando...
+        </div>
+      ) : transactions.length === 0 ? (
+        <div style={{
+          backgroundColor: C.surface, border: `1px solid ${C.border}`,
+          borderRadius: '12px', padding: '60px', textAlign: 'center',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+        }}>
+          <p style={{ fontSize: '40px', marginBottom: '12px' }}>💸</p>
+          <p style={{ fontSize: '15px', fontWeight: 600, color: C.muted, marginBottom: '4px' }}>Sin gastos este mes</p>
+          <p style={{ fontSize: '13px', color: C.tertiary, marginBottom: '16px' }}>Registra tu primer gasto</p>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'center' }}>
             {categories.slice(0, 6).map(cat => (
               <button
                 key={cat.id}
-                onClick={() => { openForm(cat.id); setCollapsed(new Set()) }}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#111827] border border-[#1e2d45] text-xs text-slate-300 hover:border-blue-500/50 hover:text-white transition-all"
+                onClick={() => { setForm(f => ({ ...f, category_id: cat.id })); setShowForm(true) }}
+                style={{
+                  padding: '6px 12px', borderRadius: '8px', fontSize: '12px',
+                  border: `1px solid ${C.border}`, backgroundColor: C.surface,
+                  color: C.muted, cursor: 'pointer',
+                }}
               >
                 {cat.icon} {cat.name}
               </button>
@@ -171,204 +330,88 @@ export default function ExpensesPage() {
           </div>
         </div>
       ) : (
-        <div className="flex flex-col gap-3">
-          {groups.map(group => {
-            const catKey = group.category?.id ?? 'null'
-            const isCollapsed = collapsed.has(catKey)
-            const isFormOpen = activeFormCatKey === catKey
-            const pct = total > 0 ? Math.round((group.total / total) * 100) : 0
-
-            return (
-              <div key={catKey} className="bg-[#0d1117] rounded-xl border border-[#1e2d45] overflow-hidden">
-                {/* Cabecera de categoría */}
-                <div className="flex items-center gap-3 px-4 py-3">
-                  <button
-                    onClick={() => toggleCollapse(catKey)}
-                    className="flex items-center gap-3 flex-1 min-w-0"
-                  >
-                    <div
-                      className="w-8 h-8 rounded-lg flex items-center justify-center text-base flex-shrink-0"
-                      style={{ background: (group.category?.color ?? '#ef4444') + '20' }}
-                    >
-                      {group.category?.icon ?? '📦'}
-                    </div>
-                    <div className="flex-1 min-w-0 text-left">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-semibold text-white truncate">
-                          {group.category?.name ?? 'Sin categoría'}
-                        </span>
-                        <span className="text-[10px] text-slate-500 flex-shrink-0">
-                          {group.transactions.length} gasto{group.transactions.length !== 1 ? 's' : ''}
-                        </span>
-                      </div>
-                      {/* Barra de progreso proporcional */}
-                      <div className="flex items-center gap-2 mt-1">
-                        <div className="flex-1 bg-[#1e2d45] rounded-full h-1">
-                          <div
-                            className="h-1 rounded-full transition-all"
-                            style={{ width: `${pct}%`, background: group.category?.color ?? '#ef4444' }}
-                          />
-                        </div>
-                        <span className="text-[10px] text-slate-500 flex-shrink-0">{pct}%</span>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3 flex-shrink-0">
-                      <span className="text-sm font-extrabold text-red-400">{formatCurrency(group.total)}</span>
-                      <span className={`text-slate-500 text-xs transition-transform ${isCollapsed ? '' : 'rotate-180'}`}>▾</span>
-                    </div>
-                  </button>
-
-                  {/* Botón agregar en esta categoría */}
-                  <button
-                    onClick={() => isFormOpen ? closeForm() : openForm(catKey)}
-                    className={`flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center text-sm transition-all ${isFormOpen ? 'bg-blue-500/20 text-blue-400' : 'bg-[#1e2d45] text-slate-400 hover:bg-blue-500/20 hover:text-blue-400'}`}
-                    title={`Agregar gasto en ${group.category?.name ?? 'Sin categoría'}`}
-                  >
-                    +
-                  </button>
-                </div>
-
-                {/* Formulario inline */}
-                {isFormOpen && (
-                  <form
-                    onSubmit={e => handleSubmit(e, group.category?.id ?? null)}
-                    className="border-t border-[#1e2d45] bg-[#111827]/50 px-4 py-4 flex flex-col gap-3"
-                  >
-                    <p className="text-xs font-semibold text-slate-400">
-                      Nuevo gasto en <span style={{ color: group.category?.color ?? '#ef4444' }}>{group.category?.name ?? 'Sin categoría'}</span>
-                    </p>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                      <div className="col-span-2">
-                        <input
-                          value={inlineForm.description}
-                          onChange={e => setInlineForm(f => ({ ...f, description: e.target.value }))}
-                          required
-                          placeholder="Descripción"
-                          autoFocus
-                          className="w-full bg-[#0d1117] border border-[#1e2d45] rounded-xl px-3 py-2 text-sm text-white placeholder:text-slate-600 outline-none focus:border-blue-500 transition-all"
-                        />
+        <div style={{
+          backgroundColor: C.surface, border: `1px solid ${C.border}`,
+          borderRadius: '12px', overflow: 'hidden',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+        }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ borderBottom: `1px solid ${C.border}` }}>
+                {['Descripción', 'Categoría', 'Fecha', 'Monto', ''].map((h, i) => (
+                  <th key={i} style={{
+                    padding: '12px 20px', textAlign: i === 3 ? 'right' : 'left',
+                    fontSize: '11px', fontWeight: 700, color: C.muted,
+                    textTransform: 'uppercase', letterSpacing: '0.5px',
+                  }}>
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {transactions.map((tx, idx) => (
+                <tr
+                  key={tx.id}
+                  style={{ borderBottom: idx < transactions.length - 1 ? `1px solid ${C.border}` : 'none' }}
+                >
+                  <td style={{ padding: '12px 20px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <div style={{
+                        width: '32px', height: '32px', borderRadius: '8px', flexShrink: 0,
+                        backgroundColor: (tx.category?.color ?? C.red) + '18',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: '14px',
+                      }}>
+                        {tx.category?.icon ?? '💸'}
                       </div>
                       <div>
-                        <input
-                          type="number"
-                          value={inlineForm.amount}
-                          onChange={e => setInlineForm(f => ({ ...f, amount: e.target.value }))}
-                          required
-                          min="1"
-                          placeholder="Monto (CLP)"
-                          className="w-full bg-[#0d1117] border border-[#1e2d45] rounded-xl px-3 py-2 text-sm text-white placeholder:text-slate-600 outline-none focus:border-blue-500 transition-all"
-                        />
-                      </div>
-                      <div>
-                        <input
-                          type="date"
-                          value={inlineForm.date}
-                          onChange={e => setInlineForm(f => ({ ...f, date: e.target.value }))}
-                          required
-                          className="w-full bg-[#0d1117] border border-[#1e2d45] rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-blue-500 transition-all"
-                        />
+                        <div style={{ fontSize: '13px', fontWeight: 500, color: C.text }}>{tx.description}</div>
+                        {tx.notes && <div style={{ fontSize: '11px', color: C.tertiary }}>{tx.notes}</div>}
                       </div>
                     </div>
-                    <div className="flex gap-2 justify-end">
-                      <button type="button" onClick={closeForm} className="px-3 py-1.5 text-xs text-slate-400 hover:text-white transition-all">Cancelar</button>
-                      <button
-                        type="submit"
-                        disabled={saving}
-                        className="bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-xl px-4 py-1.5 text-xs transition-all disabled:opacity-60"
-                      >
-                        {saving ? 'Guardando...' : 'Guardar'}
-                      </button>
-                    </div>
-                  </form>
-                )}
-
-                {/* Lista de transacciones */}
-                {!isCollapsed && (
-                  <div className="border-t border-[#1e2d45]">
-                    {group.transactions.map((tx, idx) => (
-                      <div
-                        key={tx.id}
-                        className={`flex items-center justify-between px-4 py-2.5 hover:bg-white/[0.02] ${idx < group.transactions.length - 1 ? 'border-b border-[#1e2d45]' : ''}`}
-                      >
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm text-white truncate">{tx.description}</p>
-                          {tx.notes && <p className="text-[10px] text-slate-500 truncate">{tx.notes}</p>}
-                        </div>
-                        <div className="flex items-center gap-4 flex-shrink-0 ml-4">
-                          <span className="text-[11px] text-slate-500 hidden sm:block">{formatDate(tx.date)}</span>
-                          <span className="text-sm font-semibold text-red-400">{formatCurrency(tx.amount)}</span>
-                          <button onClick={() => handleDelete(tx.id)} className="text-slate-600 hover:text-red-400 text-xs transition-all">✕</button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )
-          })}
-
-          {/* Sección para agregar en categoría nueva */}
-          <div className="bg-[#0d1117] rounded-xl border border-dashed border-[#1e2d45] overflow-hidden">
-            {activeFormCatKey === 'new' ? (
-              <form
-                onSubmit={e => {
-                  const cat = categories.find(c => c.id === (e.currentTarget.querySelector('[name=cat]') as HTMLSelectElement)?.value)
-                  return handleSubmit(e, cat?.id ?? null)
-                }}
-                className="px-4 py-4 flex flex-col gap-3"
-              >
-                <p className="text-xs font-semibold text-slate-400">Nuevo gasto</p>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <div className="col-span-2">
-                    <input
-                      value={inlineForm.description}
-                      onChange={e => setInlineForm(f => ({ ...f, description: e.target.value }))}
-                      required placeholder="Descripción" autoFocus
-                      className="w-full bg-[#111827] border border-[#1e2d45] rounded-xl px-3 py-2 text-sm text-white placeholder:text-slate-600 outline-none focus:border-blue-500 transition-all"
-                    />
-                  </div>
-                  <div>
-                    <input
-                      type="number" value={inlineForm.amount}
-                      onChange={e => setInlineForm(f => ({ ...f, amount: e.target.value }))}
-                      required min="1" placeholder="Monto (CLP)"
-                      className="w-full bg-[#111827] border border-[#1e2d45] rounded-xl px-3 py-2 text-sm text-white placeholder:text-slate-600 outline-none focus:border-blue-500 transition-all"
-                    />
-                  </div>
-                  <div>
-                    <input
-                      type="date" value={inlineForm.date}
-                      onChange={e => setInlineForm(f => ({ ...f, date: e.target.value }))}
-                      required
-                      className="w-full bg-[#111827] border border-[#1e2d45] rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-blue-500 transition-all"
-                    />
-                  </div>
-                  <div className="col-span-2">
-                    <select
-                      name="cat"
-                      className="w-full bg-[#111827] border border-[#1e2d45] rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-blue-500 transition-all"
+                  </td>
+                  <td style={{ padding: '12px 20px', fontSize: '12px', color: C.tertiary }}>
+                    {tx.category?.name ?? '—'}
+                  </td>
+                  <td style={{ padding: '12px 20px', fontSize: '12px', color: C.tertiary }}>
+                    {formatDate(tx.date)}
+                  </td>
+                  <td style={{ padding: '12px 20px', textAlign: 'right' }}>
+                    <span style={{ fontSize: '14px', fontWeight: 700, color: C.red }}>
+                      −{formatCurrency(tx.amount)}
+                    </span>
+                  </td>
+                  <td style={{ padding: '12px 20px', textAlign: 'right' }}>
+                    <button
+                      onClick={() => handleDelete(tx.id)}
+                      style={{
+                        background: 'none', border: 'none', cursor: 'pointer',
+                        fontSize: '14px', color: C.tertiary, padding: '4px', borderRadius: '4px',
+                      }}
+                      onMouseEnter={e => (e.currentTarget.style.color = C.red)}
+                      onMouseLeave={e => (e.currentTarget.style.color = C.tertiary)}
                     >
-                      <option value="">Sin categoría</option>
-                      {categories.map(c => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
-                    </select>
-                  </div>
-                </div>
-                <div className="flex gap-2 justify-end">
-                  <button type="button" onClick={closeForm} className="px-3 py-1.5 text-xs text-slate-400 hover:text-white transition-all">Cancelar</button>
-                  <button type="submit" disabled={saving} className="bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-xl px-4 py-1.5 text-xs transition-all disabled:opacity-60">
-                    {saving ? 'Guardando...' : 'Guardar'}
-                  </button>
-                </div>
-              </form>
-            ) : (
-              <button
-                onClick={() => openForm('new')}
-                className="w-full flex items-center gap-2 px-4 py-3 text-slate-500 hover:text-slate-300 text-sm transition-all"
-              >
-                <span className="text-lg">+</span> Agregar gasto en otra categoría
-              </button>
-            )}
-          </div>
+                      ✕
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr style={{ borderTop: `1px solid ${C.border}`, backgroundColor: '#F9FAFB' }}>
+                <td colSpan={3} style={{ padding: '12px 20px', fontSize: '12px', fontWeight: 700, color: C.muted }}>
+                  Total del mes
+                </td>
+                <td style={{ padding: '12px 20px', textAlign: 'right' }}>
+                  <span style={{ fontSize: '15px', fontWeight: 800, color: C.red }}>
+                    {formatCurrency(total)}
+                  </span>
+                </td>
+                <td />
+              </tr>
+            </tfoot>
+          </table>
         </div>
       )}
     </div>

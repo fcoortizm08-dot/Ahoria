@@ -5,21 +5,39 @@ import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useFinanceStore } from '@/store/useFinanceStore'
 
-const NAV = [
-  { href: '/dashboard', icon: '◈', label: 'Inicio',       group: 'app' },
-  { href: '/income',    icon: '↑', label: 'Ingresos',     group: 'app' },
-  { href: '/expenses',  icon: '↓', label: 'Gastos',       group: 'app' },
-  { href: '/debts',     icon: '◫', label: 'Deudas',       group: 'gestión' },
-  { href: '/goals',     icon: '◎', label: 'Metas',        group: 'gestión' },
-  { href: '/ai',        icon: '✦', label: 'Asistente IA', group: 'ia' },
-  { href: '/settings',  icon: '⚙', label: 'Ajustes',      group: 'cuenta' },
-]
-
-const GROUPS = [
-  { key: 'app',     label: 'App' },
-  { key: 'gestión', label: 'Gestión' },
-  { key: 'ia',      label: 'Inteligencia' },
-  { key: 'cuenta',  label: 'Cuenta' },
+const NAV_SECTIONS = [
+  {
+    label: null,
+    items: [
+      { href: '/dashboard', label: 'Dashboard', icon: '⊞' },
+    ],
+  },
+  {
+    label: 'Movimientos',
+    items: [
+      { href: '/income',   label: 'Ingresos', icon: '↑' },
+      { href: '/expenses', label: 'Gastos',   icon: '↓' },
+    ],
+  },
+  {
+    label: 'Planificación',
+    items: [
+      { href: '/goals', label: 'Metas',  icon: '◎' },
+      { href: '/debts', label: 'Deudas', icon: '◫' },
+    ],
+  },
+  {
+    label: 'Inteligencia',
+    items: [
+      { href: '/ai', label: 'Asistente IA', icon: '✦', isAI: true },
+    ],
+  },
+  {
+    label: 'Cuenta',
+    items: [
+      { href: '/settings', label: 'Configuración', icon: '⚙' },
+    ],
+  },
 ]
 
 export function Sidebar() {
@@ -34,90 +52,201 @@ export function Sidebar() {
     router.refresh()
   }
 
-  const initials = profile?.full_name?.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase() ?? 'A'
+  const initials = profile?.full_name
+    ?.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase() ?? 'A'
 
   return (
-    <aside className="hidden md:flex w-[220px] flex-col fixed top-0 left-0 bottom-0 z-50 py-5 px-3 overflow-y-auto"
-      style={{ backgroundColor: '#0e1912', borderRight: '1px solid #1e3228' }}>
-
+    <aside
+      style={{
+        width: '240px',
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        bottom: 0,
+        zIndex: 50,
+        backgroundColor: '#FFFFFF',
+        borderRight: '1px solid #E5E7EB',
+        display: 'flex',
+        flexDirection: 'column',
+        padding: '0',
+        overflowY: 'auto',
+      }}
+    >
       {/* Logo */}
-      <div className="flex items-center gap-2.5 px-2 pb-5 mb-3" style={{ borderBottom: '1px solid #1e3228' }}>
-        <div className="w-8 h-8 rounded-xl flex items-center justify-center text-white font-extrabold text-sm flex-shrink-0"
-          style={{ background: 'linear-gradient(135deg, #34d399, #059669)' }}>
-          A
-        </div>
-        <div>
-          <span className="text-[15px] font-extrabold tracking-tight" style={{ color: '#ecfdf5' }}>
-            AHO<span style={{ color: '#34d399' }}>RIA</span>
-          </span>
-          <div className="text-[9px] font-medium" style={{ color: '#364d3f' }}>
-            Ahorra ahora. Vive mejor.
+      <div style={{
+        padding: '20px 20px 16px',
+        borderBottom: '1px solid #E5E7EB',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div style={{
+            width: '34px',
+            height: '34px',
+            borderRadius: '10px',
+            background: 'linear-gradient(135deg, #10B981, #059669)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#FFFFFF',
+            fontWeight: 800,
+            fontSize: '16px',
+            flexShrink: 0,
+          }}>A</div>
+          <div>
+            <div style={{ fontSize: '15px', fontWeight: 800, color: '#111827', letterSpacing: '-0.3px' }}>
+              AHO<span style={{ color: '#10B981' }}>RIA</span>
+            </div>
+            <div style={{ fontSize: '10px', color: '#9CA3AF', fontWeight: 500 }}>
+              Finanzas inteligentes
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Nav */}
-      <div className="flex flex-col gap-4 flex-1">
-        {GROUPS.map(({ key, label }) => {
-          const items = NAV.filter(i => i.group === key)
-          if (!items.length) return null
-          return (
-            <div key={key}>
-              <p className="text-[9px] font-bold uppercase tracking-[1.4px] px-2 mb-1.5" style={{ color: '#364d3f' }}>
-                {label}
-              </p>
-              {items.map(item => {
-                const isActive = pathname === item.href
-                const isAI = item.href === '/ai'
-                return (
-                  <Link key={item.href} href={item.href}
-                    className="flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-[12px] font-medium transition-all mb-0.5 relative"
-                    style={{
-                      backgroundColor: isActive ? (isAI ? 'rgba(192,132,252,0.1)' : 'rgba(52,211,153,0.08)') : 'transparent',
-                      color: isActive ? (isAI ? '#c084fc' : '#34d399') : (isAI ? '#9d72e8' : '#6b8f7a'),
-                      border: `1px solid ${isActive ? (isAI ? 'rgba(192,132,252,0.2)' : 'rgba(52,211,153,0.15)') : 'transparent'}`,
-                    }}
-                  >
-                    {isActive && (
-                      <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-4 rounded-r-full"
-                        style={{ backgroundColor: isAI ? '#c084fc' : '#34d399' }} />
-                    )}
-                    <span className="text-sm w-4 text-center">{item.icon}</span>
-                    {item.label}
-                    {isAI && !isActive && (
-                      <span className="ml-auto text-[8px] font-bold px-1.5 py-0.5 rounded-full"
-                        style={{ backgroundColor: 'rgba(192,132,252,0.1)', color: '#c084fc' }}>
-                        IA
-                      </span>
-                    )}
-                  </Link>
-                )
-              })}
-            </div>
-          )
-        })}
-      </div>
+      {/* Navigation */}
+      <nav style={{ flex: 1, padding: '12px 12px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+        {NAV_SECTIONS.map((section, si) => (
+          <div key={si} style={{ marginBottom: section.label ? '4px' : '0' }}>
+            {section.label && (
+              <div style={{
+                fontSize: '10px',
+                fontWeight: 700,
+                color: '#9CA3AF',
+                textTransform: 'uppercase',
+                letterSpacing: '0.8px',
+                padding: '8px 8px 4px',
+              }}>
+                {section.label}
+              </div>
+            )}
+            {section.items.map((item) => {
+              const isActive = pathname === item.href
+              const isAI = (item as { isAI?: boolean }).isAI
 
-      {/* User */}
-      <div className="pt-3" style={{ borderTop: '1px solid #1e3228' }}>
-        <button onClick={handleLogout}
-          className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-[12px] font-medium transition-all"
-          style={{ color: '#6b8f7a' }}
-          onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#1a2e22'; (e.currentTarget as HTMLButtonElement).style.color = '#ecfdf5' }}
-          onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'transparent'; (e.currentTarget as HTMLButtonElement).style.color = '#6b8f7a' }}
-        >
-          <div className="w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-extrabold flex-shrink-0"
-            style={{ background: 'linear-gradient(135deg, #34d399, #818cf8)', color: '#070e0a' }}>
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '8px 10px',
+                    borderRadius: '8px',
+                    fontSize: '13px',
+                    fontWeight: isActive ? 600 : 500,
+                    textDecoration: 'none',
+                    transition: 'all 0.15s ease',
+                    position: 'relative',
+                    color: isActive
+                      ? (isAI ? '#7C3AED' : '#059669')
+                      : (isAI ? '#8B5CF6' : '#6B7280'),
+                    backgroundColor: isActive
+                      ? (isAI ? '#F5F3FF' : '#ECFDF5')
+                      : 'transparent',
+                    borderLeft: isActive
+                      ? `3px solid ${isAI ? '#8B5CF6' : '#10B981'}`
+                      : '3px solid transparent',
+                  }}
+                >
+                  <span style={{ fontSize: '14px', width: '16px', textAlign: 'center', flexShrink: 0 }}>
+                    {item.icon}
+                  </span>
+                  <span>{item.label}</span>
+                  {isAI && !isActive && (
+                    <span style={{
+                      marginLeft: 'auto',
+                      fontSize: '9px',
+                      fontWeight: 700,
+                      padding: '1px 6px',
+                      borderRadius: '999px',
+                      backgroundColor: '#F5F3FF',
+                      color: '#8B5CF6',
+                    }}>
+                      IA
+                    </span>
+                  )}
+                </Link>
+              )
+            })}
+          </div>
+        ))}
+      </nav>
+
+      {/* User section */}
+      <div style={{
+        padding: '12px',
+        borderTop: '1px solid #E5E7EB',
+      }}>
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px',
+          padding: '8px 10px',
+          borderRadius: '8px',
+          marginBottom: '4px',
+        }}>
+          <div style={{
+            width: '32px',
+            height: '32px',
+            borderRadius: '999px',
+            background: 'linear-gradient(135deg, #10B981, #3B82F6)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#FFFFFF',
+            fontSize: '11px',
+            fontWeight: 700,
+            flexShrink: 0,
+          }}>
             {initials}
           </div>
-          <div className="flex-1 text-left min-w-0">
-            <div className="font-semibold truncate text-[11px]" style={{ color: '#ecfdf5' }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{
+              fontSize: '12px',
+              fontWeight: 600,
+              color: '#111827',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}>
               {profile?.full_name ?? 'Usuario'}
             </div>
-            <div className="text-[9px]" style={{ color: '#364d3f' }}>Cerrar sesión</div>
+            <div style={{ fontSize: '10px', color: '#9CA3AF' }}>Plan Gratis</div>
           </div>
+        </div>
+        <button
+          onClick={handleLogout}
+          style={{
+            width: '100%',
+            padding: '7px 10px',
+            borderRadius: '8px',
+            border: '1px solid #E5E7EB',
+            backgroundColor: 'transparent',
+            color: '#6B7280',
+            fontSize: '12px',
+            fontWeight: 500,
+            cursor: 'pointer',
+            transition: 'all 0.15s ease',
+            textAlign: 'center',
+          }}
+          onMouseEnter={e => {
+            const el = e.currentTarget as HTMLButtonElement
+            el.style.backgroundColor = '#FEF2F2'
+            el.style.borderColor = '#FECACA'
+            el.style.color = '#DC2626'
+          }}
+          onMouseLeave={e => {
+            const el = e.currentTarget as HTMLButtonElement
+            el.style.backgroundColor = 'transparent'
+            el.style.borderColor = '#E5E7EB'
+            el.style.color = '#6B7280'
+          }}
+        >
+          Cerrar sesión
         </button>
       </div>
     </aside>
   )
 }
+
+export default Sidebar

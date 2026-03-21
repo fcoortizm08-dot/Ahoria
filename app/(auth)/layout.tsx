@@ -1,60 +1,90 @@
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen flex" style={{ backgroundColor: '#070e0a' }}>
+    <div style={{ minHeight: '100vh', display: 'flex', backgroundColor: '#FFFFFF' }}>
 
-      {/* Panel izquierdo — solo desktop */}
-      <div className="hidden lg:flex lg:w-[480px] flex-col justify-between p-12"
-        style={{ backgroundColor: '#0e1912', borderRight: '1px solid #1e3228' }}>
-
+      {/* Left panel — desktop only */}
+      <div
+        className="hidden lg:flex lg:w-[480px] flex-col justify-between"
+        style={{
+          padding: '48px',
+          backgroundColor: '#F0FDF4',
+          borderRight: '1px solid #D1FAE5',
+        }}
+      >
         {/* Logo */}
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center text-white font-extrabold text-base"
-            style={{ background: 'linear-gradient(135deg, #34d399, #059669)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{
+            width: '38px', height: '38px', borderRadius: '10px',
+            background: 'linear-gradient(135deg, #10B981, #059669)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            color: '#FFFFFF', fontWeight: 800, fontSize: '18px',
+          }}>
             A
           </div>
-          <span className="font-extrabold text-lg tracking-tight" style={{ color: '#ecfdf5' }}>
-            AHO<span style={{ color: '#34d399' }}>RIA</span>
-          </span>
+          <div>
+            <span style={{ fontSize: '18px', fontWeight: 800, color: '#111827', letterSpacing: '-0.3px' }}>
+              AHO<span style={{ color: '#10B981' }}>RIA</span>
+            </span>
+          </div>
         </div>
 
-        {/* Copy central */}
+        {/* Central copy */}
         <div>
-          <div className="inline-flex items-center gap-2 mb-6 px-3 py-1.5 rounded-full"
-            style={{ backgroundColor: 'rgba(52,211,153,0.1)', border: '1px solid rgba(52,211,153,0.2)' }}>
-            <div className="w-1.5 h-1.5 rounded-full ah-pulse" style={{ backgroundColor: '#34d399' }} />
-            <span className="text-xs font-semibold" style={{ color: '#34d399' }}>Tu dinero, en orden</span>
+          <div style={{
+            display: 'inline-flex', alignItems: 'center', gap: '8px',
+            backgroundColor: '#ECFDF5', border: '1px solid #A7F3D0',
+            borderRadius: '999px', padding: '6px 14px', marginBottom: '24px',
+          }}>
+            <div style={{
+              width: '6px', height: '6px', borderRadius: '999px',
+              backgroundColor: '#10B981', animation: 'pulse 2s ease-in-out infinite',
+            }} />
+            <span style={{ fontSize: '12px', fontWeight: 600, color: '#059669' }}>Tu dinero, en orden</span>
           </div>
-          <h1 className="text-4xl font-extrabold leading-tight tracking-tight mb-4" style={{ color: '#ecfdf5' }}>
+
+          <h1 style={{
+            fontSize: '38px', fontWeight: 900, lineHeight: 1.15,
+            letterSpacing: '-1px', marginBottom: '16px', color: '#111827',
+          }}>
             Ahorra ahora.<br />
-            <span style={{ color: '#34d399' }}>Vive mejor.</span>
+            <span style={{ color: '#10B981' }}>Vive mejor.</span>
           </h1>
-          <p className="text-base leading-relaxed mb-10" style={{ color: '#6b8f7a' }}>
+          <p style={{ fontSize: '15px', lineHeight: 1.7, color: '#6B7280', marginBottom: '36px' }}>
             Entiende tu situación financiera en menos de 1 minuto
             y toma mejores decisiones, todos los días.
           </p>
-          <div className="flex flex-col gap-4">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             {[
               { icon: '📊', title: 'Pulso financiero en tiempo real', desc: 'Tu salud financiera de un vistazo' },
               { icon: '💸', title: 'Control de ingresos y gastos', desc: 'Registra en 3 toques, sin complicaciones' },
               { icon: '🎯', title: 'Metas de ahorro con progreso', desc: 'Del sueño al plan concreto' },
-              { icon: '✦', title: 'Asistente IA incluido', desc: 'Preguntas, análisis y consejos reales' },
+              { icon: '✦', title: 'Asistente IA incluido', desc: 'Análisis, consejos y proyecciones' },
             ].map(f => (
-              <div key={f.title} className="flex items-start gap-3">
-                <span className="text-xl flex-shrink-0 mt-0.5">{f.icon}</span>
+              <div key={f.title} style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                <div style={{
+                  width: '32px', height: '32px', borderRadius: '8px',
+                  backgroundColor: '#ECFDF5', border: '1px solid #A7F3D0',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: '16px', flexShrink: 0,
+                }}>
+                  {f.icon}
+                </div>
                 <div>
-                  <p className="text-sm font-semibold" style={{ color: '#ecfdf5' }}>{f.title}</p>
-                  <p className="text-xs" style={{ color: '#6b8f7a' }}>{f.desc}</p>
+                  <div style={{ fontSize: '13px', fontWeight: 700, color: '#111827' }}>{f.title}</div>
+                  <div style={{ fontSize: '12px', color: '#6B7280' }}>{f.desc}</div>
                 </div>
               </div>
             ))}
           </div>
         </div>
 
-        <p className="text-xs" style={{ color: '#364d3f' }}>© 2026 AHORIA · Para profesionales de LATAM</p>
+        <p style={{ fontSize: '11px', color: '#9CA3AF' }}>© 2026 AHORIA · Finanzas personales inteligentes</p>
       </div>
 
-      {/* Formulario */}
-      <div className="flex-1 flex items-center justify-center p-6">
+      {/* Right: form */}
+      <div style={{
+        flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px 24px',
+      }}>
         {children}
       </div>
     </div>

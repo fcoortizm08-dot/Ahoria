@@ -5,15 +5,11 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 
-const S = {
-  bg:      '#070e0a',
-  surface: '#0e1912',
-  border:  '#1e3228',
-  brand:   '#34d399',
-  text:    '#ecfdf5',
-  muted:   '#6b8f7a',
-  input:   '#131f18',
-  error:   '#f87171',
+const C = {
+  border: '#E5E7EB', green: '#10B981', greenDk: '#059669', greenBg: '#ECFDF5',
+  text: '#111827', muted: '#6B7280', tertiary: '#9CA3AF',
+  red: '#EF4444', redBg: '#FEF2F2',
+  surface: '#FFFFFF',
 }
 
 export default function LoginPage() {
@@ -38,84 +34,130 @@ export default function LoginPage() {
     router.refresh()
   }
 
+  const inputStyle: React.CSSProperties = {
+    width: '100%', padding: '11px 14px',
+    border: `1px solid ${C.border}`, borderRadius: '8px',
+    backgroundColor: C.surface, color: C.text,
+    fontSize: '14px', outline: 'none',
+    transition: 'border-color 0.15s ease, box-shadow 0.15s ease',
+    boxSizing: 'border-box',
+  }
+
   return (
-    <div className="w-full max-w-sm">
+    <div style={{ width: '100%', maxWidth: '380px' }}>
       {/* Mobile logo */}
       <div className="flex items-center gap-2.5 mb-8 lg:hidden">
-        <div className="w-8 h-8 rounded-xl flex items-center justify-center text-white font-extrabold text-sm"
-          style={{ background: 'linear-gradient(135deg, #34d399, #059669)' }}>A</div>
-        <span className="font-extrabold text-base" style={{ color: S.text }}>
-          AHO<span style={{ color: S.brand }}>RIA</span>
+        <div style={{
+          width: '34px', height: '34px', borderRadius: '10px',
+          background: 'linear-gradient(135deg, #10B981, #059669)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          color: '#FFFFFF', fontWeight: 800, fontSize: '16px',
+        }}>A</div>
+        <span style={{ fontSize: '18px', fontWeight: 800, color: C.text }}>
+          AHO<span style={{ color: C.green }}>RIA</span>
         </span>
       </div>
 
-      <div className="mb-8">
-        <h2 className="text-2xl font-extrabold tracking-tight mb-1" style={{ color: S.text }}>
+      <div style={{ marginBottom: '28px' }}>
+        <h2 style={{ fontSize: '26px', fontWeight: 800, color: C.text, letterSpacing: '-0.5px', margin: '0 0 6px' }}>
           Bienvenido de vuelta
         </h2>
-        <p className="text-sm" style={{ color: S.muted }}>
+        <p style={{ fontSize: '14px', color: C.muted, margin: 0 }}>
           Ingresa para ver tu pulso financiero
         </p>
       </div>
 
-      <form onSubmit={handleLogin} className="flex flex-col gap-4">
+      <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
         {error && (
-          <div className="flex items-center gap-2 rounded-xl px-4 py-3 text-sm"
-            style={{ backgroundColor: 'rgba(248,113,113,0.08)', border: `1px solid rgba(248,113,113,0.2)`, color: S.error }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: '8px',
+            padding: '12px 14px', borderRadius: '8px',
+            backgroundColor: C.redBg, border: `1px solid #FECACA`,
+            color: C.red, fontSize: '13px', fontWeight: 500,
+          }}>
             <span>⚠</span> {error}
           </div>
         )}
 
         <div>
-          <label className="block text-xs font-semibold mb-1.5" style={{ color: S.muted }}>
+          <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: C.muted, marginBottom: '6px' }}>
             Email
           </label>
-          <input type="email" value={email} onChange={e => setEmail(e.target.value)}
+          <input
+            type="email" value={email}
+            onChange={e => setEmail(e.target.value)}
             placeholder="tu@email.com" required autoComplete="email"
-            className="w-full rounded-xl px-3.5 py-3 text-sm outline-none transition-all"
-            style={{
-              backgroundColor: S.input, border: `1px solid ${S.border}`,
-              color: S.text, caretColor: S.brand,
+            style={inputStyle}
+            onFocus={e => {
+              e.target.style.borderColor = C.green
+              e.target.style.boxShadow = '0 0 0 3px rgba(16,185,129,0.1)'
             }}
-            onFocus={e => e.target.style.borderColor = S.brand}
-            onBlur={e => e.target.style.borderColor = S.border}
+            onBlur={e => {
+              e.target.style.borderColor = C.border
+              e.target.style.boxShadow = 'none'
+            }}
           />
         </div>
 
         <div>
-          <label className="block text-xs font-semibold mb-1.5" style={{ color: S.muted }}>
-            Contraseña
-          </label>
-          <input type="password" value={password} onChange={e => setPassword(e.target.value)}
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+            <label style={{ fontSize: '13px', fontWeight: 600, color: C.muted }}>
+              Contraseña
+            </label>
+            <button
+              type="button"
+              style={{
+                fontSize: '12px', color: C.green, background: 'none',
+                border: 'none', cursor: 'pointer', fontWeight: 500, padding: 0,
+              }}
+            >
+              ¿Olvidaste tu contraseña?
+            </button>
+          </div>
+          <input
+            type="password" value={password}
+            onChange={e => setPassword(e.target.value)}
             placeholder="••••••••" required autoComplete="current-password"
-            className="w-full rounded-xl px-3.5 py-3 text-sm outline-none transition-all"
-            style={{
-              backgroundColor: S.input, border: `1px solid ${S.border}`,
-              color: S.text, caretColor: S.brand,
+            style={inputStyle}
+            onFocus={e => {
+              e.target.style.borderColor = C.green
+              e.target.style.boxShadow = '0 0 0 3px rgba(16,185,129,0.1)'
             }}
-            onFocus={e => e.target.style.borderColor = S.brand}
-            onBlur={e => e.target.style.borderColor = S.border}
+            onBlur={e => {
+              e.target.style.borderColor = C.border
+              e.target.style.boxShadow = 'none'
+            }}
           />
         </div>
 
-        <button type="submit" disabled={isLoading}
-          className="w-full font-bold rounded-xl py-3 text-sm transition-all mt-1 active:scale-[0.98] disabled:opacity-60"
+        <button
+          type="submit" disabled={isLoading}
           style={{
-            background: isLoading ? S.border : 'linear-gradient(135deg, #34d399, #059669)',
-            color: '#070e0a',
-          }}>
+            width: '100%', fontWeight: 700, borderRadius: '8px',
+            padding: '12px', fontSize: '14px',
+            background: isLoading ? C.border : 'linear-gradient(135deg, #10B981, #059669)',
+            color: isLoading ? C.muted : '#FFFFFF',
+            border: 'none', cursor: isLoading ? 'not-allowed' : 'pointer',
+            transition: 'all 0.15s ease', marginTop: '4px',
+            boxShadow: isLoading ? 'none' : '0 2px 6px rgba(16,185,129,0.3)',
+          }}
+        >
           {isLoading ? (
-            <span className="flex items-center justify-center gap-2">
-              <span className="w-3.5 h-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+            <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+              <span style={{
+                width: '14px', height: '14px', borderRadius: '999px',
+                border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#FFFFFF',
+                animation: 'spin 0.8s linear infinite', display: 'block',
+              }} />
               Ingresando...
             </span>
           ) : 'Ingresar a AHORIA'}
         </button>
       </form>
 
-      <p className="text-center text-sm mt-6" style={{ color: S.muted }}>
+      <p style={{ textAlign: 'center', fontSize: '13px', color: C.muted, marginTop: '20px' }}>
         ¿No tienes cuenta?{' '}
-        <Link href="/register" className="font-semibold transition-all hover:opacity-80" style={{ color: S.brand }}>
+        <Link href="/register" style={{ color: C.green, fontWeight: 700, textDecoration: 'none' }}>
           Crea la tuya gratis
         </Link>
       </p>

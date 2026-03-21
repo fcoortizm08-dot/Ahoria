@@ -1,11 +1,12 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import {
   formatCurrency, formatRelativeDate, getGreeting,
   calculateHealthScore, calculateMonthProjection,
-  generateAutoInsights, getDaysInMonth,
+  getDaysInMonth,
 } from '@/lib/utils'
 import { useFinanceStore } from '@/store/useFinanceStore'
 import { MonthSelector } from '@/components/common/MonthSelector'
@@ -15,846 +16,701 @@ import type {
 } from '@/types'
 import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer } from 'recharts'
 
-// ─────────────────────────────────────────────────────────────────────────────
-// AHORIA Design Tokens
-// ─────────────────────────────────────────────────────────────────────────────
+// ─── Design tokens ────────────────────────────────────────────
 const C = {
-  bg:      '#070e0a',   // fondo base
-  surface: '#0e1912',   // cards
-  elevated:'#131f18',   // cards elevadas
-  border:  '#1e3228',   // bordes
-  brand:   '#34d399',   // verde esmeralda (brand)
-  income:  '#34d399',   // ingresos
-  expense: '#f87171',   // gastos
-  debt:    '#fbbf24',   // deudas
-  goal:    '#818cf8',   // metas
-  ai:      '#c084fc',   // IA / premium
-  text:    '#ecfdf5',   // texto primario
-  muted:   '#6b8f7a',   // texto secundario
-  dim:     '#364d3f',   // texto terciario
+  bg:       '#F7F8FA',
+  surface:  '#FFFFFF',
+  border:   '#E5E7EB',
+  green:    '#10B981',
+  greenDk:  '#059669',
+  greenBg:  '#ECFDF5',
+  blue:     '#3B82F6',
+  blueBg:   '#EFF6FF',
+  amber:    '#F59E0B',
+  amberBg:  '#FFFBEB',
+  red:      '#EF4444',
+  redBg:    '#FEF2F2',
+  ai:       '#8B5CF6',
+  aiBg:     '#F5F3FF',
+  text:     '#111827',
+  muted:    '#6B7280',
+  tertiary: '#9CA3AF',
 }
 
 const MONTHS_SHORT = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Tipos
-// ─────────────────────────────────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────
+interface GoalItem {
+  id: string; name: string; icon: string; color: string
+  pct: number; target: number; current: number
+}
 interface Stats {
-  totalIncome:        number
-  totalExpenses:      number
-  savingsRate:        number
-  available:          number
-  todayExpenses:      number
-  yesterdayExpenses:  number
-  healthScore:        HealthScoreData
-  projection:         MonthProjection
-  recentTransactions: Transaction[]
-  monthlyData:        MonthlyData[]
-  categoryData:       CategoryExpense[]
-  streak:             Streak | null
-  debtCount:          number
-  debtTotal:          number
-  goalList:           { id: string; name: string; icon: string; color: string; pct: number; target: number; current: number }[]
+  totalIncome: number; totalExpenses: number; savingsRate: number; available: number
+  todayExpenses: number; yesterdayExpenses: number
+  healthScore: HealthScoreData; projection: MonthProjection
+  recentTransactions: Transaction[]; monthlyData: MonthlyData[]
+  categoryData: CategoryExpense[]; streak: Streak | null
+  debtCount: number; debtTotal: number; goalList: GoalItem[]
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────────────────────────────────────
-/** Formato compacto: $182k, $1.2M */
-function fmt(n: number): string {
-  if (Math.abs(n) >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`
-  if (Math.abs(n) >= 1_000)     return `$${Math.round(n / 1_000)}k`
-  return `$${n}`
-}
-
-/** Agrupa transacciones por fecha descendente */
-function groupByDate(txs: Transaction[]): [string, Transaction[]][] {
-  const map = new Map<string, Transaction[]>()
-  txs.forEach(tx => {
-    const key = tx.date.split('T')[0]
-    if (!map.has(key)) map.set(key, [])
-    map.get(key)!.push(tx)
-  })
-  return Array.from(map.entries()).sort((a, b) => b[0].localeCompare(a[0]))
-}
-
-/** Color dinámico del health score con paleta AHORIA */
-function scoreColor(score: number): string {
-  if (score >= 80) return C.income     // esmeralda
-  if (score >= 60) return '#a3e635'    // lima
-  if (score >= 40) return C.debt       // ámbar
-  return C.expense                     // rosa
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Sub-componentes
-// ─────────────────────────────────────────────────────────────────────────────
-
-/** Indicador circular de Score */
+// ─── Score ring ───────────────────────────────────────────────
 function ScoreRing({ score, color }: { score: number; color: string }) {
-  const r   = 22
+  const r = 22
   const circ = 2 * Math.PI * r
   const dash = (score / 100) * circ
   return (
-    <div className="relative w-14 h-14 flex-shrink-0">
-      <svg width="56" height="56" className="-rotate-90">
+    <div style={{ position: 'relative', width: '56px', height: '56px', flexShrink: 0 }}>
+      <svg width="56" height="56" style={{ transform: 'rotate(-90deg)' }}>
         <circle cx="28" cy="28" r={r} fill="none" stroke={C.border} strokeWidth="4" />
         <circle cx="28" cy="28" r={r} fill="none" stroke={color} strokeWidth="4"
-          strokeLinecap="round"
-          strokeDasharray={`${dash} ${circ}`}
-          style={{ transition: 'stroke-dasharray 0.8s ease' }}
-        />
+          strokeDasharray={`${dash} ${circ}`} strokeLinecap="round" />
       </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-[13px] font-extrabold leading-none" style={{ color }}>{score}</span>
-        <span className="text-[7px] font-semibold" style={{ color: C.dim }}>score</span>
+      <div style={{
+        position: 'absolute', inset: 0,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: '11px', fontWeight: 800, color,
+      }}>
+        {score}
       </div>
     </div>
   )
 }
 
-/** Barra de velocidad de gasto */
-function RhythmCard({ dailyAvg, daysLeft, available }: { dailyAvg: number; daysLeft: number; available: number }) {
-  const safeAvg = daysLeft > 0 ? available / daysLeft : 0
-  const vel     = safeAvg > 0 ? dailyAvg / safeAvg : 1
-  const level   = vel < 0.8 ? 'bajo' : vel < 1.15 ? 'normal' : 'alto'
-  const cfg     = {
-    bajo:   { icon: '🐢', label: 'Ritmo bajo',   sub: 'Vas muy bien',        color: C.income },
-    normal: { icon: '✓',  label: 'Ritmo normal', sub: 'En el plan',          color: C.goal   },
-    alto:   { icon: '⚡', label: 'Ritmo alto',   sub: 'Ojo con los gastos',  color: C.debt   },
-  }[level]
+// ─── Cashflow chart ───────────────────────────────────────────
+function CashflowChart({ data }: { data: MonthlyData[] }) {
   return (
-    <div>
-      <div className="flex items-center gap-2 mb-1">
-        <span className="text-xl leading-none">{cfg.icon}</span>
-        <span className="text-sm font-extrabold" style={{ color: cfg.color }}>{cfg.label}</span>
-      </div>
-      <p className="text-[10px]" style={{ color: C.dim }}>
-        {cfg.sub} · {fmt(dailyAvg)}/día
-      </p>
+    <div style={{ height: '160px' }}>
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart data={data} barGap={4} margin={{ top: 4, right: 4, left: 4, bottom: 0 }}>
+          <XAxis dataKey="month" tick={{ fontSize: 10, fill: C.tertiary }} axisLine={false} tickLine={false} />
+          <Tooltip
+            contentStyle={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '8px', fontSize: '12px', color: C.text }}
+            formatter={(value, name) => [formatCurrency(Number(value)), name === 'income' ? 'Ingresos' : 'Gastos']}
+          />
+          <Bar dataKey="income" fill={C.green} radius={[4,4,0,0]} maxBarSize={28} />
+          <Bar dataKey="expenses" fill={C.red} radius={[4,4,0,0]} maxBarSize={28} />
+        </BarChart>
+      </ResponsiveContainer>
     </div>
   )
 }
 
-/** Skeleton de carga */
-function DashboardSkeleton() {
-  const pulse = { backgroundColor: C.surface, border: `1px solid ${C.border}` }
+// ─── KPI Card ─────────────────────────────────────────────────
+function KpiCard({ label, value, sub, color, bg }: { label: string; value: string; sub?: string; color?: string; bg?: string }) {
   return (
-    <div className="flex flex-col gap-4 pb-24">
-      <div className="flex justify-between items-center">
-        <div className="h-6 w-44 rounded-xl animate-pulse" style={pulse} />
-        <div className="h-8 w-24 rounded-xl animate-pulse" style={pulse} />
+    <div style={{
+      backgroundColor: C.surface, border: `1px solid ${C.border}`,
+      borderRadius: '12px', padding: '16px 20px',
+      boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+      flex: 1,
+    }}>
+      <div style={{ fontSize: '11px', fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>
+        {label}
       </div>
-      <div className="h-8 rounded-2xl animate-pulse" style={pulse} />
-      <div className="h-60 rounded-2xl animate-pulse" style={pulse} />
-      <div className="grid grid-cols-2 gap-3">
-        <div className="h-24 rounded-2xl animate-pulse" style={pulse} />
-        <div className="h-24 rounded-2xl animate-pulse" style={pulse} />
-      </div>
-      <div className="h-40 rounded-2xl animate-pulse" style={pulse} />
-      <div className="grid grid-cols-2 gap-3">
-        <div className="h-24 rounded-2xl animate-pulse" style={pulse} />
-        <div className="h-24 rounded-2xl animate-pulse" style={pulse} />
-      </div>
-      <div className="h-44 rounded-2xl animate-pulse" style={pulse} />
+      <div style={{ fontSize: '22px', fontWeight: 800, color: color ?? C.text, letterSpacing: '-0.5px' }}>{value}</div>
+      {sub && <div style={{ fontSize: '11px', color: C.tertiary, marginTop: '4px' }}>{sub}</div>}
     </div>
   )
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Página principal
-// ─────────────────────────────────────────────────────────────────────────────
+// ─── Main page ────────────────────────────────────────────────
 export default function DashboardPage() {
-  const [stats, setStats]               = useState<Stats | null>(null)
-  const [isLoading, setIsLoading]       = useState(true)
-  const [dismissedInsight, setDismissed] = useState(false)
-  const { profile, activeYear, activeMonth } = useFinanceStore()
+  const [stats, setStats] = useState<Stats | null>(null)
+  const [loading, setLoading] = useState(true)
+  const { activeYear, activeMonth, profile, addToast } = useFinanceStore()
+  const [showAddModal, setShowAddModal] = useState(false)
 
-  // ── Carga de datos ──────────────────────────────────────────────────────────
   const fetchStats = useCallback(async () => {
-    setIsLoading(true)
+    setLoading(true)
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+    if (!user) { setLoading(false); return }
 
-    const now         = new Date()
-    const sixMonthsAgo= new Date(now.getFullYear(), now.getMonth() - 5, 1)
-    const monthStart  = new Date(activeYear, activeMonth, 1).toISOString().split('T')[0]
-    const monthEnd    = new Date(activeYear, activeMonth + 1, 0).toISOString().split('T')[0]
-    const todayStr    = now.toISOString().split('T')[0]
-    const yest        = new Date(now); yest.setDate(yest.getDate() - 1)
-    const yesterdayStr= yest.toISOString().split('T')[0]
+    const start = new Date(activeYear, activeMonth, 1).toISOString().split('T')[0]
+    const end   = new Date(activeYear, activeMonth + 1, 0).toISOString().split('T')[0]
 
-    const [
-      { data: allTxs },
-      { data: streakData },
-      { data: debts },
-      { data: goals },
-    ] = await Promise.all([
-      supabase.from('transactions')
-        .select('*, category:categories(*)')
-        .eq('user_id', user.id).is('deleted_at', null)
-        .gte('date', sixMonthsAgo.toISOString().split('T')[0])
-        .order('date', { ascending: false }),
-      supabase.from('streaks').select('*').eq('user_id', user.id).maybeSingle(),
-      supabase.from('debts').select('id, current_balance').eq('user_id', user.id).eq('status', 'active'),
-      supabase.from('goals').select('id, name, icon, color, target_amount, current_amount').eq('user_id', user.id).eq('status', 'active'),
+    // Six months for chart
+    const sixMonthsAgo = new Date(activeYear, activeMonth - 5, 1).toISOString().split('T')[0]
+
+    const [txRes, recentRes, goalRes, debtRes, streakRes, sixMoRes] = await Promise.all([
+      supabase.from('transactions').select('*, category:categories(*)')
+        .eq('user_id', user.id).is('deleted_at', null).gte('date', start).lte('date', end),
+      supabase.from('transactions').select('*, category:categories(*)')
+        .eq('user_id', user.id).is('deleted_at', null).gte('date', start).lte('date', end)
+        .order('date', { ascending: false }).limit(8),
+      supabase.from('goals').select('*').eq('user_id', user.id).eq('status', 'active'),
+      supabase.from('debts').select('*').eq('user_id', user.id).eq('status', 'active'),
+      supabase.from('streaks').select('*').eq('user_id', user.id).single(),
+      supabase.from('transactions').select('*, category:categories(*)')
+        .eq('user_id', user.id).is('deleted_at', null).gte('date', sixMonthsAgo).lte('date', end),
     ])
 
-    const txs       = allTxs ?? []
-    const monthTxs  = txs.filter(t => t.date >= monthStart && t.date <= monthEnd)
-    const totalIncome   = monthTxs.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0)
-    const totalExpenses = monthTxs.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0)
-    const savingsRate   = totalIncome > 0 ? ((totalIncome - totalExpenses) / totalIncome) * 100 : 0
+    const txs      = txRes.data ?? []
+    const recent   = recentRes.data ?? []
+    const goals    = goalRes.data ?? []
+    const debts    = debtRes.data ?? []
+    const streak   = streakRes.data ?? null
+    const sixMoTxs = sixMoRes.data ?? []
+
+    const totalIncome   = txs.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0)
+    const totalExpenses = txs.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0)
+    const savingsRate   = totalIncome > 0 ? Math.round(((totalIncome - totalExpenses) / totalIncome) * 100) : 0
     const available     = totalIncome - totalExpenses
-    const debtCount     = debts?.length ?? 0
-    const debtTotal     = debts?.reduce((s, d) => s + (d.current_balance ?? 0), 0) ?? 0
-    const hasGoals      = (goals?.length ?? 0) > 0
 
-    const todayExpenses     = txs.filter(t => t.type === 'expense' && t.date === todayStr).reduce((s, t) => s + t.amount, 0)
-    const yesterdayExpenses = txs.filter(t => t.type === 'expense' && t.date === yesterdayStr).reduce((s, t) => s + t.amount, 0)
+    // Today / yesterday
+    const todayStr     = new Date().toISOString().split('T')[0]
+    const yesterdayStr = new Date(Date.now() - 86400000).toISOString().split('T')[0]
+    const todayExpenses     = txs.filter(t => t.type === 'expense' && t.date.startsWith(todayStr)).reduce((s, t) => s + t.amount, 0)
+    const yesterdayExpenses = txs.filter(t => t.type === 'expense' && t.date.startsWith(yesterdayStr)).reduce((s, t) => s + t.amount, 0)
 
-    const goalList = (goals ?? []).map(g => ({
-      id: g.id, name: g.name, icon: g.icon, color: g.color,
-      target: g.target_amount, current: g.current_amount,
-      pct: g.target_amount > 0 ? Math.min(100, Math.round((g.current_amount / g.target_amount) * 100)) : 0,
-    }))
+    // Category breakdown
+    const catMap = new Map<string, CategoryExpense>()
+    txs.filter(t => t.type === 'expense').forEach(t => {
+      const key  = t.category_id ?? '__none__'
+      const name = t.category?.name ?? 'Sin categoría'
+      const icon = t.category?.icon ?? '📦'
+      const color = t.category?.color ?? '#6B7280'
+      if (!catMap.has(key)) catMap.set(key, { name, icon, color, amount: 0, percentage: 0, budget: t.category?.monthly_budget ?? null, category_id: key })
+      catMap.get(key)!.amount += t.amount
+    })
+    const catData = Array.from(catMap.values())
+      .map(c => ({ ...c, percentage: totalExpenses > 0 ? Math.round((c.amount / totalExpenses) * 100) : 0 }))
+      .sort((a, b) => b.amount - a.amount)
 
+    // Monthly data (6 months)
+    const monthMap = new Map<string, MonthlyData>()
+    for (let i = 5; i >= 0; i--) {
+      const d     = new Date(activeYear, activeMonth - i, 1)
+      const key   = `${d.getFullYear()}-${d.getMonth()}`
+      const label = MONTHS_SHORT[d.getMonth()]
+      monthMap.set(key, { month: label, income: 0, expenses: 0, savings: 0 })
+    }
+    sixMoTxs.forEach(t => {
+      const d   = new Date(t.date)
+      const key = `${d.getFullYear()}-${d.getMonth()}`
+      if (!monthMap.has(key)) return
+      const m = monthMap.get(key)!
+      if (t.type === 'income') m.income += t.amount
+      else m.expenses += t.amount
+    })
+    const monthlyData = Array.from(monthMap.values()).map(m => ({ ...m, savings: m.income - m.expenses }))
+
+    // Health score
     const healthScore = calculateHealthScore({
       totalIncome, totalExpenses,
-      hasActiveDebts: debtCount > 0, debtCount, hasGoals,
-      streakDays: streakData?.current_streak ?? 0,
+      hasActiveDebts: debts.length > 0, debtCount: debts.length,
+      hasGoals: goals.length > 0,
+      streakDays: streak?.current_streak ?? 0,
     })
+
+    // Projection
     const projection = calculateMonthProjection({ totalExpenses, totalIncome, year: activeYear, month: activeMonth })
 
-    // Últimas 10 transacciones del mes
-    const recentTransactions = monthTxs.slice(0, 10)
+    // Goal list
+    const goalList: GoalItem[] = goals.map(g => ({
+      id: g.id, name: g.name, icon: g.icon, color: g.color,
+      pct: g.target_amount > 0 ? Math.min(Math.round((g.current_amount / g.target_amount) * 100), 100) : 0,
+      target: g.target_amount, current: g.current_amount,
+    }))
 
-    // Datos de 6 meses para gráfico
-    const monthlyData: MonthlyData[] = []
-    for (let i = 5; i >= 0; i--) {
-      const d  = new Date(now.getFullYear(), now.getMonth() - i, 1)
-      const mS = d.toISOString().split('T')[0]
-      const mE = new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().split('T')[0]
-      const mt = txs.filter(t => t.date >= mS && t.date <= mE)
-      const inc = mt.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0)
-      const exp = mt.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0)
-      monthlyData.push({ month: MONTHS_SHORT[d.getMonth()], income: inc, expenses: exp, savings: Math.max(0, inc - exp) })
-    }
-
-    // Gastos por categoría del mes
-    const catMap = new Map<string, Omit<CategoryExpense, 'percentage'>>()
-    monthTxs.filter(t => t.type === 'expense').forEach(t => {
-      const key = t.category?.name ?? 'Sin categoría'
-      const ex  = catMap.get(key)
-      if (ex) { ex.amount += t.amount }
-      else catMap.set(key, {
-        name: key, amount: t.amount,
-        color: t.category?.color ?? C.muted,
-        icon: t.category?.icon ?? '📦',
-        budget: t.category?.monthly_budget ?? null,
-        category_id: t.category_id ?? '',
-      })
+    setStats({
+      totalIncome, totalExpenses, savingsRate, available,
+      todayExpenses, yesterdayExpenses,
+      healthScore, projection, recentTransactions: recent,
+      monthlyData, categoryData: catData, streak,
+      debtCount: debts.length,
+      debtTotal: debts.reduce((s, d) => s + d.current_balance, 0),
+      goalList,
     })
-    const categoryData: CategoryExpense[] = Array.from(catMap.values())
-      .sort((a, b) => b.amount - a.amount)
-      .map(c => ({ ...c, percentage: totalExpenses > 0 ? Math.round((c.amount / totalExpenses) * 100) : 0 }))
-
-    setStats({ totalIncome, totalExpenses, savingsRate, available, todayExpenses, yesterdayExpenses, healthScore, projection, recentTransactions, monthlyData, categoryData, streak: streakData ?? null, debtCount, debtTotal, goalList })
-    setIsLoading(false)
+    setLoading(false)
   }, [activeYear, activeMonth])
 
   useEffect(() => { fetchStats() }, [fetchStats])
 
-  // ── Cálculos derivados ──────────────────────────────────────────────────────
-  const autoInsights = stats ? generateAutoInsights({
-    totalIncome: stats.totalIncome, totalExpenses: stats.totalExpenses,
-    categoryData: stats.categoryData, projection: stats.projection,
-    healthScore: stats.healthScore, streakDays: stats.streak?.current_streak ?? 0,
-  }) : []
+  const greeting = getGreeting()
+  const firstName = profile?.full_name?.split(' ')[0] ?? 'Usuario'
+  const today = new Date()
+  const dayNames = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado']
+  const monthNames = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre']
+  const dateLabel = `${dayNames[today.getDay()]} ${today.getDate()} de ${monthNames[today.getMonth()]} ${today.getFullYear()}`
 
-  const daysTotal       = getDaysInMonth(activeYear, activeMonth)
-  const daysElapsed     = stats?.projection.daysElapsed ?? 1
-  const daysLeft        = daysTotal - daysElapsed
-  const monthPct        = stats && stats.totalIncome > 0 ? Math.round((stats.totalExpenses / stats.totalIncome) * 100) : 0
-  const firstName       = profile?.full_name?.split(' ')[0] ?? ''
-  const isCurrentMonth  = new Date().getFullYear() === activeYear && new Date().getMonth() === activeMonth
-  const grouped         = stats ? groupByDate(stats.recentTransactions) : []
+  const daysInMonth  = getDaysInMonth(activeYear, activeMonth)
+  const dayOfMonth   = today.getDate()
+  const monthPct     = Math.round((dayOfMonth / daysInMonth) * 100)
 
-  const hs = stats?.healthScore
-  const sc = hs ? scoreColor(hs.score) : C.brand
-  const barFill = monthPct > 95 ? C.expense : monthPct > 80 ? C.debt : C.brand
+  const scoreColorFn = (score: number) => {
+    if (score >= 80) return C.green
+    if (score >= 60) return '#84cc16'
+    if (score >= 40) return C.amber
+    return C.red
+  }
 
-  // ── Render: Skeleton ────────────────────────────────────────────────────────
-  if (isLoading) return <DashboardSkeleton />
+  if (loading) {
+    return (
+      <div style={{ padding: '32px 40px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '16px', marginBottom: '24px' }}>
+          {[1,2,3,4].map(i => (
+            <div key={i} style={{ height: '80px', backgroundColor: C.surface, borderRadius: '12px', border: `1px solid ${C.border}` }} />
+          ))}
+        </div>
+        <div style={{ height: '180px', backgroundColor: C.surface, borderRadius: '12px', border: `1px solid ${C.border}` }} />
+      </div>
+    )
+  }
+
   if (!stats) return null
 
-  // ── Render principal ────────────────────────────────────────────────────────
+  const { healthScore, projection } = stats
+  const scoreColor = scoreColorFn(healthScore.score)
+
   return (
-    <div className="flex flex-col gap-4 pb-28">
+    <div style={{ padding: '32px 40px', maxWidth: '1400px', margin: '0 auto' }}>
 
-      {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-          1. HEADER — Saludo + streak + selector de mes
-      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-      <div className="flex items-center justify-between gap-2">
+      {/* ── Header row ──────────────────────────────────────────── */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '28px' }}>
         <div>
-          <h1 className="text-[17px] font-extrabold leading-tight" style={{ color: C.text }}>
-            {getGreeting()}{firstName ? `, ${firstName}` : ''} 👋
+          <h1 style={{ fontSize: '22px', fontWeight: 800, color: C.text, margin: 0 }}>
+            {greeting}, {firstName} 👋
           </h1>
-          <p className="text-[11px] mt-0.5 capitalize" style={{ color: C.dim }}>
-            {new Date().toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long' })}
-          </p>
+          <p style={{ fontSize: '13px', color: C.muted, marginTop: '4px' }}>{dateLabel}</p>
         </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
-          {stats.streak && stats.streak.current_streak >= 2 && (
-            <div className="flex items-center gap-1.5 rounded-xl px-2.5 py-1.5"
-              style={{ backgroundColor: C.elevated, border: `1px solid ${C.border}` }}>
-              <span className="text-sm">🔥</span>
-              <span className="text-xs font-extrabold" style={{ color: '#fb923c' }}>
-                {stats.streak.current_streak}
-              </span>
-            </div>
-          )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <MonthSelector />
+          <Link href="/expenses" style={{
+            backgroundColor: C.green, color: '#FFFFFF',
+            padding: '8px 16px', borderRadius: '8px',
+            fontSize: '13px', fontWeight: 600,
+            textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '6px',
+            boxShadow: '0 2px 4px rgba(16,185,129,0.25)',
+          }}>
+            + Agregar
+          </Link>
         </div>
       </div>
 
-      {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-          2. ACCIONES RÁPIDAS — Atajos más usados
-      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-      <div className="flex gap-2">
-        {[
-          { href: '/expenses', icon: '↓', label: 'Registrar gasto',   color: C.expense },
-          { href: '/income',   icon: '↑', label: 'Registrar ingreso', color: C.income  },
-          { href: '/debts',    icon: '◫', label: 'Ver deudas',        color: C.debt    },
-          { href: '/goals',    icon: '◎', label: 'Mis metas',         color: C.goal    },
-        ].map(a => (
-          <a key={a.href} href={a.href}
-            className="flex-1 flex flex-col items-center gap-1 py-2.5 rounded-2xl transition-all active:scale-[0.96]"
-            style={{ backgroundColor: C.surface, border: `1px solid ${C.border}` }}>
-            <span className="text-base font-bold leading-none" style={{ color: a.color }}>{a.icon}</span>
-            <span className="text-[8px] font-semibold text-center leading-tight" style={{ color: C.muted }}>
-              {a.label}
-            </span>
-          </a>
-        ))}
-      </div>
+      {/* ── Hero card ────────────────────────────────────────────── */}
+      <div style={{
+        backgroundColor: C.surface, border: `1px solid ${C.border}`,
+        borderRadius: '12px', padding: '28px 32px',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+        marginBottom: '20px',
+        display: 'flex', alignItems: 'stretch', gap: '0',
+      }}>
+        {/* Left: available */}
+        <div style={{ flex: '0 0 auto', paddingRight: '40px', borderRight: `1px solid ${C.border}` }}>
+          <div style={{ fontSize: '11px', fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: '8px' }}>
+            Disponible este mes
+          </div>
+          <div style={{ fontSize: '38px', fontWeight: 900, color: C.text, letterSpacing: '-1px', lineHeight: 1, marginBottom: '12px' }}>
+            {formatCurrency(stats.available)}
+          </div>
+          <span style={{
+            display: 'inline-block',
+            backgroundColor: healthScore.score >= 80 ? C.greenBg : healthScore.score >= 60 ? '#F0FDF4' : healthScore.score >= 40 ? C.amberBg : C.redBg,
+            color: scoreColor,
+            fontSize: '11px', fontWeight: 700,
+            padding: '3px 10px', borderRadius: '999px',
+            border: `1px solid ${scoreColor}40`,
+            marginBottom: '16px',
+          }}>
+            {healthScore.label}
+          </span>
+          <div>
+            <div style={{ fontSize: '11px', color: C.tertiary, marginBottom: '6px' }}>
+              Día {dayOfMonth} de {daysInMonth} — {monthPct}% del mes
+            </div>
+            <div style={{ height: '4px', backgroundColor: '#E5E7EB', borderRadius: '999px', width: '200px' }}>
+              <div style={{
+                height: '4px', borderRadius: '999px',
+                backgroundColor: C.green,
+                width: `${monthPct}%`,
+                transition: 'width 0.5s ease',
+              }} />
+            </div>
+          </div>
+        </div>
 
-      {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-          3. HERO CARD — Pulso Financiero del mes
-      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-      <div className="rounded-2xl overflow-hidden"
-        style={{ backgroundColor: C.surface, border: `1px solid ${C.border}` }}>
-
-        {/* Accent gradient dinámico */}
-        <div className="h-[3px] w-full"
-          style={{ background: `linear-gradient(90deg, ${sc}, ${sc}30)` }} />
-
-        <div className="p-5">
-
-          {/* ── Fila superior: score ring + balance disponible ── */}
-          <div className="flex items-start gap-4 mb-5">
-            <ScoreRing score={hs?.score ?? 0} color={sc} />
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="w-1.5 h-1.5 rounded-full ah-pulse flex-shrink-0" style={{ backgroundColor: sc }} />
-                <span className="text-[11px] font-semibold" style={{ color: sc }}>
-                  Salud {hs?.label ?? '—'}
-                </span>
-                <span className="text-[10px]" style={{ color: C.dim }}>
-                  · {MONTHS_SHORT[activeMonth]} {activeYear}
-                </span>
+        {/* Right: 3 stat boxes */}
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', paddingLeft: '40px', gap: '0' }}>
+          {[
+            { label: 'Ingresos', value: formatCurrency(stats.totalIncome), color: C.green, bg: C.greenBg, icon: '↑' },
+            { label: 'Gastos', value: formatCurrency(stats.totalExpenses), color: C.red, bg: C.redBg, icon: '↓' },
+            { label: 'Ahorro', value: formatCurrency(Math.max(stats.totalIncome - stats.totalExpenses, 0)), color: C.blue, bg: C.blueBg, icon: '🐖', sub: `${stats.savingsRate}% de ingresos` },
+          ].map((item, idx) => (
+            <div key={item.label} style={{
+              flex: 1,
+              paddingLeft: idx > 0 ? '28px' : '0',
+              marginLeft: idx > 0 ? '28px' : '0',
+              borderLeft: idx > 0 ? `1px solid ${C.border}` : 'none',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+                <div style={{
+                  width: '24px', height: '24px', borderRadius: '6px',
+                  backgroundColor: item.bg,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: '12px', color: item.color,
+                }}>
+                  {item.icon}
+                </div>
+                <span style={{ fontSize: '11px', fontWeight: 600, color: C.muted }}>{item.label}</span>
               </div>
-              <p className="text-[10px] font-semibold uppercase tracking-[1.5px] mb-1" style={{ color: C.muted }}>
-                Disponible este mes
-              </p>
-              <p className="text-[38px] font-extrabold leading-none tracking-tight"
-                style={{ color: stats.available >= 0 ? C.text : C.expense }}>
-                {fmt(stats.available)}
-              </p>
-              {stats.totalIncome > 0 && (
-                <p className="text-[11px] mt-1.5 leading-relaxed" style={{ color: C.muted }}>
-                  de{' '}
-                  <span className="font-semibold" style={{ color: C.text }}>
-                    {formatCurrency(stats.totalIncome)}
-                  </span>
-                  {stats.savingsRate > 0 && (
-                    <> ·{' '}
-                      <span className="font-semibold" style={{ color: C.income }}>
-                        {Math.round(stats.savingsRate)}% ahorrando
-                      </span>
-                    </>
-                  )}
-                </p>
-              )}
-            </div>
-          </div>
-
-          {/* ── Barra de progreso del mes ── */}
-          <div className="mb-5">
-            <div className="flex items-center justify-between text-[10px] mb-2">
-              <span style={{ color: C.muted }}>Día {daysElapsed} de {daysTotal}</span>
-              <span style={{ color: monthPct > 95 ? C.expense : monthPct > 80 ? C.debt : C.muted }}>
-                {monthPct}% gastado
-                {isCurrentMonth && daysLeft > 0 && (
-                  <span style={{ color: C.dim }}> · {daysLeft}d restantes</span>
-                )}
-              </span>
-            </div>
-            <div className="relative h-2.5 rounded-full overflow-hidden" style={{ backgroundColor: C.border }}>
-              {/* Barra de gasto */}
-              <div className="absolute inset-y-0 left-0 rounded-full transition-all duration-700"
-                style={{ width: `${Math.min(100, monthPct)}%`, backgroundColor: barFill }} />
-              {/* Indicador del día actual */}
-              {isCurrentMonth && (
-                <div className="absolute top-0 bottom-0 w-0.5 rounded-full"
-                  style={{
-                    left: `${Math.round((daysElapsed / daysTotal) * 100)}%`,
-                    backgroundColor: 'rgba(236,253,245,0.35)',
-                  }} />
-              )}
-            </div>
-            {isCurrentMonth && monthPct > Math.round((daysElapsed / daysTotal) * 100) + 10 && (
-              <p className="text-[10px] mt-1.5" style={{ color: C.debt }}>
-                ⚠ Ritmo de gasto por encima del tiempo transcurrido
-              </p>
-            )}
-          </div>
-
-          {/* ── Stats finales: ingresos / gastos / proyectado ── */}
-          <div className="grid grid-cols-3 gap-3 pt-4" style={{ borderTop: `1px solid ${C.border}` }}>
-            {[
-              {
-                label: 'Ingresos',
-                value: fmt(stats.totalIncome),
-                color: C.income,
-                sub:   `${stats.totalIncome > 0 ? '+' : ''}${Math.round(stats.savingsRate)}% guardado`,
-              },
-              {
-                label: 'Gastos',
-                value: fmt(stats.totalExpenses),
-                color: C.expense,
-                sub:   stats.categoryData[0] ? `Mayor: ${stats.categoryData[0].name}` : 'Sin gastos',
-              },
-              {
-                label: isCurrentMonth ? 'Proyectado' : 'Balance final',
-                value: isCurrentMonth ? fmt(stats.projection.projectedExpenses) : fmt(stats.available),
-                color: stats.projection.projectedBalance >= 0 ? C.text : C.expense,
-                sub:   stats.projection.isOverBudget ? 'Sobre presupuesto' : 'Dentro del plan',
-              },
-            ].map(col => (
-              <div key={col.label}>
-                <p className="text-[9px] font-semibold uppercase tracking-wider mb-1" style={{ color: C.dim }}>
-                  {col.label}
-                </p>
-                <p className="text-[15px] font-extrabold leading-tight" style={{ color: col.color }}>
-                  {col.value}
-                </p>
-                <p className="text-[9px] mt-0.5 truncate" style={{ color: C.dim }}>{col.sub}</p>
+              <div style={{ fontSize: '20px', fontWeight: 800, color: item.color, letterSpacing: '-0.3px' }}>
+                {item.value}
               </div>
-            ))}
-          </div>
+              {item.sub && <div style={{ fontSize: '11px', color: C.tertiary, marginTop: '2px' }}>{item.sub}</div>}
+            </div>
+          ))}
         </div>
       </div>
 
-      {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-          4. INSIGHT DEL DÍA
-      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-      {autoInsights.length > 0 && !dismissedInsight && (() => {
-        const ins = autoInsights[0]
-        const iMap: Record<string, { bg: string; border: string }> = {
-          spending_alert: { bg: 'rgba(251,191,36,0.06)',  border: 'rgba(251,191,36,0.2)'  },
-          projection:     { bg: 'rgba(248,113,113,0.06)', border: 'rgba(248,113,113,0.2)' },
-          achievement:    { bg: 'rgba(52,211,153,0.06)',  border: 'rgba(52,211,153,0.2)'  },
-          tip:            { bg: 'rgba(129,140,248,0.06)', border: 'rgba(129,140,248,0.2)' },
-        }
-        const ic = iMap[ins.type] ?? { bg: 'rgba(52,211,153,0.05)', border: 'rgba(52,211,153,0.15)' }
-        return (
-          <div className="flex items-start gap-3 rounded-2xl px-4 py-3.5"
-            style={{ backgroundColor: ic.bg, border: `1px solid ${ic.border}` }}>
-            <span className="text-xl flex-shrink-0 mt-0.5">{ins.icon}</span>
-            <div className="flex-1 min-w-0">
-              <p className="text-[13px] font-semibold leading-snug" style={{ color: C.text }}>
-                {ins.title}
-              </p>
-              <p className="text-[11px] mt-1 leading-relaxed" style={{ color: C.muted }}>
-                {ins.body}
-              </p>
-            </div>
-            <button onClick={() => setDismissed(true)}
-              className="flex-shrink-0 w-5 h-5 flex items-center justify-center rounded-lg transition-all"
-              style={{ color: C.dim, backgroundColor: 'rgba(255,255,255,0.04)' }}>
-              ✕
-            </button>
+      {/* ── KPI Row ──────────────────────────────────────────────── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '24px' }}>
+        {/* Gasto hoy */}
+        <div style={{
+          backgroundColor: C.surface, border: `1px solid ${C.border}`,
+          borderRadius: '12px', padding: '16px 20px',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+        }}>
+          <div style={{ fontSize: '11px', fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>
+            Gasto hoy
           </div>
-        )
-      })()}
-
-      {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-          5. HOY vs RITMO (solo mes activo)
-      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-      {isCurrentMonth && (
-        <div className="grid grid-cols-2 gap-3">
-
-          {/* Card: Gastos de hoy */}
-          <div className="rounded-2xl p-4" style={{ backgroundColor: C.surface, border: `1px solid ${C.border}` }}>
-            <div className="flex items-center gap-1.5 mb-3">
-              <div className="w-1.5 h-1.5 rounded-full ah-pulse" style={{ backgroundColor: C.brand }} />
-              <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: C.muted }}>Hoy</p>
-            </div>
-            {stats.todayExpenses > 0 ? (
-              <>
-                <p className="text-xl font-extrabold" style={{ color: C.text }}>
-                  {fmt(stats.todayExpenses)}
-                </p>
-                {stats.yesterdayExpenses > 0 && (
-                  <p className="text-[10px] mt-1">
-                    <span style={{ color: stats.todayExpenses > stats.yesterdayExpenses ? C.expense : C.income }}>
-                      {stats.todayExpenses > stats.yesterdayExpenses ? '↑' : '↓'}{' '}
-                      {Math.round(Math.abs((stats.todayExpenses - stats.yesterdayExpenses) / stats.yesterdayExpenses) * 100)}%
-                    </span>
-                    <span style={{ color: C.dim }}> vs ayer</span>
-                  </p>
-                )}
-                {stats.yesterdayExpenses === 0 && (
-                  <p className="text-[10px] mt-1" style={{ color: C.dim }}>primer gasto del día</p>
-                )}
-              </>
-            ) : (
-              <>
-                <p className="text-xl font-extrabold" style={{ color: C.dim }}>$0</p>
-                <p className="text-[10px] mt-1" style={{ color: C.dim }}>Sin gastos aún hoy</p>
-              </>
-            )}
+          <div style={{ fontSize: '20px', fontWeight: 800, color: stats.todayExpenses > 0 ? C.red : C.text }}>
+            {formatCurrency(stats.todayExpenses)}
           </div>
-
-          {/* Card: Ritmo de gasto */}
-          <div className="rounded-2xl p-4" style={{ backgroundColor: C.surface, border: `1px solid ${C.border}` }}>
-            <div className="flex items-center gap-1.5 mb-3">
-              <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: C.muted }} />
-              <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: C.muted }}>Ritmo</p>
-            </div>
-            {stats.projection.dailyAvg > 0
-              ? <RhythmCard dailyAvg={stats.projection.dailyAvg} daysLeft={daysLeft} available={stats.available} />
-              : <p className="text-xl font-extrabold" style={{ color: C.dim }}>—</p>
+          <div style={{ fontSize: '11px', color: C.tertiary, marginTop: '4px' }}>
+            {stats.yesterdayExpenses > 0
+              ? stats.todayExpenses > stats.yesterdayExpenses
+                ? `↑ vs ayer (${formatCurrency(stats.yesterdayExpenses)})`
+                : `↓ vs ayer (${formatCurrency(stats.yesterdayExpenses)})`
+              : 'Sin gastos ayer'
             }
           </div>
         </div>
-      )}
 
-      {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-          6. GASTOS POR CATEGORÍA (scroll horizontal)
-      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-      {stats.categoryData.length > 0 && (
-        <div>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-[13px] font-bold" style={{ color: C.text }}>Por categoría</h2>
-            <a href="/expenses" className="text-[11px] font-medium" style={{ color: C.brand }}>
-              Ver desglose →
-            </a>
+        {/* Ritmo */}
+        <div style={{
+          backgroundColor: C.surface, border: `1px solid ${C.border}`,
+          borderRadius: '12px', padding: '16px 20px',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+        }}>
+          <div style={{ fontSize: '11px', fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>
+            Ritmo de gasto
           </div>
-          <div className="flex gap-2.5 overflow-x-auto pb-1 -mx-4 px-4 scrollbar-none">
-            {stats.categoryData.slice(0, 8).map(cat => {
-              const catColor  = cat.color || C.muted
-              const budgetPct = cat.budget ? Math.min(100, Math.round((cat.amount / cat.budget) * 100)) : null
-              const barColor  = budgetPct !== null
-                ? budgetPct >= 100 ? C.expense : budgetPct >= 80 ? C.debt : catColor
-                : catColor
-              return (
-                <div key={cat.name}
-                  className="flex-shrink-0 w-[108px] rounded-2xl p-3 flex flex-col gap-2.5 transition-all active:scale-[0.97]"
-                  style={{ backgroundColor: C.surface, border: `1px solid ${C.border}` }}>
-                  <div className="flex items-center justify-between">
-                    <div className="w-8 h-8 rounded-xl flex items-center justify-center text-[15px]"
-                      style={{ backgroundColor: catColor + '18' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{
+              fontSize: '13px', fontWeight: 700,
+              padding: '2px 8px', borderRadius: '999px',
+              backgroundColor: projection.isOverBudget ? C.redBg : C.greenBg,
+              color: projection.isOverBudget ? C.red : C.green,
+            }}>
+              {projection.isOverBudget ? 'Alto' : 'Normal'}
+            </span>
+          </div>
+          <div style={{ fontSize: '11px', color: C.tertiary, marginTop: '4px' }}>
+            Prom. diario: {formatCurrency(projection.dailyAvg)}
+          </div>
+        </div>
+
+        {/* Proyección */}
+        <div style={{
+          backgroundColor: C.surface, border: `1px solid ${C.border}`,
+          borderRadius: '12px', padding: '16px 20px',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+        }}>
+          <div style={{ fontSize: '11px', fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>
+            Proyección fin de mes
+          </div>
+          <div style={{ fontSize: '20px', fontWeight: 800, color: projection.isOverBudget ? C.red : C.text }}>
+            {formatCurrency(projection.projectedExpenses)}
+          </div>
+          <div style={{ fontSize: '11px', color: C.tertiary, marginTop: '4px' }}>
+            {projection.isOverBudget ? '⚠ Superarías ingresos' : 'Dentro del presupuesto'}
+          </div>
+        </div>
+
+        {/* Score */}
+        <div style={{
+          backgroundColor: C.surface, border: `1px solid ${C.border}`,
+          borderRadius: '12px', padding: '16px 20px',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+          display: 'flex', alignItems: 'center', gap: '14px',
+        }}>
+          <ScoreRing score={healthScore.score} color={scoreColor} />
+          <div>
+            <div style={{ fontSize: '11px', fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px' }}>
+              Score financiero
+            </div>
+            <div style={{ fontSize: '14px', fontWeight: 700, color: scoreColor }}>
+              {healthScore.label}
+            </div>
+            <div style={{ fontSize: '11px', color: C.tertiary }}>de 100 puntos</div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Main 2-column grid ───────────────────────────────────── */}
+      <div style={{ display: 'grid', gridTemplateColumns: '60fr 40fr', gap: '20px', marginBottom: '24px' }}>
+
+        {/* LEFT COLUMN */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+
+          {/* Category expenses */}
+          <div style={{
+            backgroundColor: C.surface, border: `1px solid ${C.border}`,
+            borderRadius: '12px', padding: '24px',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '18px' }}>
+              <h3 style={{ fontSize: '14px', fontWeight: 700, color: C.text, margin: 0 }}>Gastos por categoría</h3>
+              <Link href="/expenses" style={{ fontSize: '12px', color: C.green, textDecoration: 'none', fontWeight: 600 }}>
+                Ver todos →
+              </Link>
+            </div>
+            {stats.categoryData.length === 0 ? (
+              <p style={{ fontSize: '13px', color: C.tertiary, textAlign: 'center', padding: '20px 0' }}>
+                Sin gastos este mes
+              </p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {stats.categoryData.slice(0, 6).map(cat => (
+                  <div key={cat.category_id} style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div style={{
+                      width: '34px', height: '34px', borderRadius: '8px',
+                      backgroundColor: cat.color + '18',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: '16px', flexShrink: 0,
+                    }}>
                       {cat.icon}
                     </div>
-                    <span className="text-[10px] font-bold" style={{ color: C.muted }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                        <span style={{ fontSize: '13px', fontWeight: 500, color: C.text }}>{cat.name}</span>
+                        <span style={{ fontSize: '13px', fontWeight: 700, color: C.red }}>{formatCurrency(cat.amount)}</span>
+                      </div>
+                      <div style={{ height: '4px', backgroundColor: '#E5E7EB', borderRadius: '999px' }}>
+                        <div style={{
+                          height: '4px', borderRadius: '999px',
+                          backgroundColor: cat.color,
+                          width: `${cat.percentage}%`,
+                        }} />
+                      </div>
+                    </div>
+                    <span style={{ fontSize: '11px', color: C.tertiary, width: '28px', textAlign: 'right', flexShrink: 0 }}>
                       {cat.percentage}%
                     </span>
                   </div>
-                  <div>
-                    <p className="text-[10px] leading-snug truncate" style={{ color: C.muted }}>{cat.name}</p>
-                    <p className="text-[15px] font-extrabold mt-0.5 leading-tight" style={{ color: C.text }}>
-                      {fmt(cat.amount)}
-                    </p>
-                  </div>
-                  {/* Barra de presupuesto (si existe) */}
-                  {budgetPct !== null && (
-                    <div>
-                      <div className="h-1 rounded-full overflow-hidden" style={{ backgroundColor: C.border }}>
-                        <div className="h-full rounded-full transition-all"
-                          style={{ width: `${budgetPct}%`, backgroundColor: barColor }} />
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Cashflow chart */}
+          <div style={{
+            backgroundColor: C.surface, border: `1px solid ${C.border}`,
+            borderRadius: '12px', padding: '24px',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+          }}>
+            <div style={{ marginBottom: '4px' }}>
+              <h3 style={{ fontSize: '14px', fontWeight: 700, color: C.text, margin: 0 }}>Flujo de caja</h3>
+              <p style={{ fontSize: '12px', color: C.tertiary, margin: '2px 0 16px' }}>Últimos 6 meses</p>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <div style={{ width: '8px', height: '8px', borderRadius: '2px', backgroundColor: C.green }} />
+                <span style={{ fontSize: '11px', color: C.muted }}>Ingresos</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <div style={{ width: '8px', height: '8px', borderRadius: '2px', backgroundColor: C.red }} />
+                <span style={{ fontSize: '11px', color: C.muted }}>Gastos</span>
+              </div>
+            </div>
+            <CashflowChart data={stats.monthlyData} />
+          </div>
+        </div>
+
+        {/* RIGHT COLUMN */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+
+          {/* Goals */}
+          <div style={{
+            backgroundColor: C.surface, border: `1px solid ${C.border}`,
+            borderRadius: '12px', padding: '24px',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '18px' }}>
+              <h3 style={{ fontSize: '14px', fontWeight: 700, color: C.text, margin: 0 }}>Metas de ahorro</h3>
+              <Link href="/goals" style={{ fontSize: '12px', color: C.blue, textDecoration: 'none', fontWeight: 600 }}>
+                Nueva meta →
+              </Link>
+            </div>
+            {stats.goalList.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '16px 0' }}>
+                <p style={{ fontSize: '24px', marginBottom: '6px' }}>🎯</p>
+                <p style={{ fontSize: '12px', color: C.tertiary, margin: 0 }}>Sin metas activas</p>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                {stats.goalList.slice(0, 3).map(g => (
+                  <div key={g.id}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                      <span style={{ fontSize: '16px' }}>{g.icon}</span>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <span style={{ fontSize: '12px', fontWeight: 600, color: C.text }}>{g.name}</span>
+                          <span style={{ fontSize: '11px', color: C.blue, fontWeight: 600 }}>{g.pct}%</span>
+                        </div>
                       </div>
-                      <p className="text-[8px] mt-0.5 font-medium" style={{ color: C.dim }}>
-                        {budgetPct}% del límite
-                      </p>
                     </div>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-          7. DEUDAS + METAS (grid 50/50)
-      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-      {(stats.debtCount > 0 || stats.goalList.length > 0) && (
-        <div className="grid grid-cols-2 gap-3">
-
-          {stats.debtCount > 0 && (
-            <a href="/debts" className="rounded-2xl p-4 block transition-all active:scale-[0.97]"
-              style={{ backgroundColor: C.surface, border: `1px solid ${C.border}` }}
-              onMouseEnter={e => (e.currentTarget as HTMLElement).style.borderColor = 'rgba(248,113,113,0.3)'}
-              onMouseLeave={e => (e.currentTarget as HTMLElement).style.borderColor = C.border}>
-              <div className="flex items-center gap-2 mb-3">
-                <div className="w-6 h-6 rounded-lg flex items-center justify-center text-sm"
-                  style={{ backgroundColor: 'rgba(248,113,113,0.1)' }}>
-                  💳
-                </div>
-                <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: C.muted }}>
-                  Deudas
-                </p>
-              </div>
-              <p className="text-xl font-extrabold" style={{ color: C.expense }}>
-                {fmt(stats.debtTotal)}
-              </p>
-              <p className="text-[10px] mt-1" style={{ color: C.dim }}>
-                {stats.debtCount} activa{stats.debtCount !== 1 ? 's' : ''}
-              </p>
-              <p className="text-[10px] mt-3 font-medium" style={{ color: C.muted }}>
-                Gestionar →
-              </p>
-            </a>
-          )}
-
-          {stats.goalList.length > 0 && (
-            <a href="/goals" className="rounded-2xl p-4 block transition-all active:scale-[0.97]"
-              style={{ backgroundColor: C.surface, border: `1px solid ${C.border}` }}
-              onMouseEnter={e => (e.currentTarget as HTMLElement).style.borderColor = 'rgba(129,140,248,0.3)'}
-              onMouseLeave={e => (e.currentTarget as HTMLElement).style.borderColor = C.border}>
-              <div className="flex items-center gap-2 mb-3">
-                <div className="w-6 h-6 rounded-lg flex items-center justify-center text-sm"
-                  style={{ backgroundColor: 'rgba(129,140,248,0.1)' }}>
-                  🎯
-                </div>
-                <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: C.muted }}>
-                  Meta principal
-                </p>
-              </div>
-              {stats.goalList[0] && (
-                <>
-                  <p className="text-[12px] font-semibold truncate mb-2" style={{ color: C.text }}>
-                    {stats.goalList[0].icon} {stats.goalList[0].name}
-                  </p>
-                  {/* Progress ring pequeño + porcentaje */}
-                  <div className="flex items-center gap-2.5">
-                    <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: C.border }}>
-                      <div className="h-full rounded-full transition-all duration-700"
-                        style={{
-                          width: `${stats.goalList[0].pct}%`,
-                          backgroundColor: stats.goalList[0].color || C.goal,
-                        }} />
+                    <div style={{ height: '4px', backgroundColor: '#E5E7EB', borderRadius: '999px' }}>
+                      <div style={{
+                        height: '4px', borderRadius: '999px',
+                        backgroundColor: g.color,
+                        width: `${g.pct}%`,
+                      }} />
                     </div>
-                    <span className="text-[10px] font-bold flex-shrink-0" style={{ color: stats.goalList[0].color || C.goal }}>
-                      {stats.goalList[0].pct}%
-                    </span>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '3px' }}>
+                      <span style={{ fontSize: '10px', color: C.tertiary }}>{formatCurrency(g.current)}</span>
+                      <span style={{ fontSize: '10px', color: C.tertiary }}>{formatCurrency(g.target)}</span>
+                    </div>
                   </div>
-                  <p className="text-[9px] mt-1" style={{ color: C.dim }}>
-                    {fmt(stats.goalList[0].current)} de {fmt(stats.goalList[0].target)}
-                  </p>
-                </>
-              )}
-              <p className="text-[10px] mt-3 font-medium" style={{ color: C.muted }}>
-                Ver metas →
-              </p>
-            </a>
-          )}
-        </div>
-      )}
-
-      {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-          8. TARJETA ASISTENTE IA — Acceso rápido a Fin
-      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-      <a href="/ai" className="block transition-all active:scale-[0.98]"
-        style={{ background: 'linear-gradient(135deg, rgba(192,132,252,0.08), rgba(129,140,248,0.06))', border: `1px solid rgba(192,132,252,0.18)`, borderRadius: 16 }}>
-        <div className="px-4 py-4 flex items-center gap-4">
-          <div className="w-10 h-10 rounded-2xl flex items-center justify-center font-extrabold text-base flex-shrink-0"
-            style={{ background: 'linear-gradient(135deg, #c084fc, #818cf8)', color: '#070e0a' }}>
-            ✦
+                ))}
+              </div>
+            )}
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-[13px] font-bold" style={{ color: C.text }}>
-              Pregúntale a Fin
-            </p>
-            <p className="text-[11px]" style={{ color: '#9d72e8' }}>
-              "¿Cómo voy este mes?" · "¿Cuándo logro mi meta?"
-            </p>
-          </div>
-          <div className="flex-shrink-0 text-sm" style={{ color: '#9d72e8' }}>→</div>
-        </div>
-      </a>
 
-      {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-          9. GRÁFICO FLUJO DE CAJA — 6 meses
-      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-      {stats.monthlyData.some(m => m.income > 0 || m.expenses > 0) && (
-        <div className="rounded-2xl p-4" style={{ backgroundColor: C.surface, border: `1px solid ${C.border}` }}>
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-[13px] font-bold" style={{ color: C.text }}>Flujo de caja</h2>
-            <div className="flex items-center gap-3">
-              {[
-                { color: C.income,  label: 'Ingresos' },
-                { color: C.expense, label: 'Gastos'   },
-              ].map(l => (
-                <div key={l.label} className="flex items-center gap-1.5 text-[10px]" style={{ color: C.muted }}>
-                  <div className="w-2 h-2 rounded-sm" style={{ backgroundColor: l.color }} />
-                  {l.label}
+          {/* Debts */}
+          <div style={{
+            backgroundColor: C.surface, border: `1px solid ${C.border}`,
+            borderRadius: '12px', padding: '24px',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+              <h3 style={{ fontSize: '14px', fontWeight: 700, color: C.text, margin: 0 }}>Deudas</h3>
+              <Link href="/debts" style={{ fontSize: '12px', color: C.amber, textDecoration: 'none', fontWeight: 600 }}>
+                Gestionar →
+              </Link>
+            </div>
+            {stats.debtCount === 0 ? (
+              <div style={{ textAlign: 'center', padding: '16px 0' }}>
+                <p style={{ fontSize: '24px', marginBottom: '6px' }}>✓</p>
+                <p style={{ fontSize: '12px', color: C.green, fontWeight: 600, margin: 0 }}>Sin deudas activas</p>
+              </div>
+            ) : (
+              <div>
+                <div style={{ fontSize: '28px', fontWeight: 900, color: C.amber, letterSpacing: '-0.5px', marginBottom: '4px' }}>
+                  {formatCurrency(stats.debtTotal)}
                 </div>
+                <div style={{ fontSize: '12px', color: C.tertiary }}>
+                  {stats.debtCount} deuda{stats.debtCount !== 1 ? 's' : ''} activa{stats.debtCount !== 1 ? 's' : ''}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* AI card */}
+          <div style={{
+            background: 'linear-gradient(135deg, #F5F3FF 0%, #EFF6FF 100%)',
+            border: `1px solid #DDD6FE`,
+            borderRadius: '12px', padding: '20px',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
+              <div style={{
+                width: '36px', height: '36px', borderRadius: '10px',
+                background: 'linear-gradient(135deg, #8B5CF6, #3B82F6)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: '#FFFFFF', fontWeight: 800, fontSize: '14px',
+              }}>F</div>
+              <div>
+                <div style={{ fontSize: '13px', fontWeight: 700, color: '#111827' }}>Asistente IA — Fin</div>
+                <div style={{ fontSize: '11px', color: '#8B5CF6' }}>¿En qué te ayudo hoy?</div>
+              </div>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '14px' }}>
+              {['¿Cómo voy este mes?', '¿En qué gasto más?', 'Dame un consejo'].map(q => (
+                <Link key={q} href="/ai" style={{
+                  display: 'block', padding: '7px 10px', borderRadius: '8px',
+                  backgroundColor: '#FFFFFF', border: '1px solid #DDD6FE',
+                  fontSize: '12px', color: '#7C3AED', textDecoration: 'none', fontWeight: 500,
+                  transition: 'background-color 0.15s',
+                }}>
+                  {q}
+                </Link>
               ))}
             </div>
+            <Link href="/ai" style={{
+              display: 'block', textAlign: 'center', padding: '8px',
+              backgroundColor: '#8B5CF6', color: '#FFFFFF',
+              borderRadius: '8px', fontSize: '12px', fontWeight: 600,
+              textDecoration: 'none',
+            }}>
+              Abrir chat →
+            </Link>
           </div>
-          <ResponsiveContainer width="100%" height={120}>
-            <BarChart data={stats.monthlyData} barSize={8} barGap={3} barCategoryGap="30%">
-              <XAxis
-                dataKey="month"
-                tick={{ fontSize: 10, fill: C.dim }}
-                axisLine={false}
-                tickLine={false}
-              />
-              <Tooltip
-                cursor={{ fill: 'rgba(236,253,245,0.03)', radius: 4 }}
-                contentStyle={{
-                  backgroundColor: C.elevated,
-                  border: `1px solid ${C.border}`,
-                  borderRadius: 12,
-                  fontSize: 11,
-                  padding: '8px 12px',
-                  color: C.text,
-                }}
-                formatter={(v: unknown) => [formatCurrency(Number(v))]}
-                labelStyle={{ color: C.muted, marginBottom: 4 }}
-              />
-              <Bar dataKey="income"   fill={C.income}  radius={[3,3,0,0]} name="Ingresos" />
-              <Bar dataKey="expenses" fill={C.expense} radius={[3,3,0,0]} name="Gastos"   />
-            </BarChart>
-          </ResponsiveContainer>
-          {/* Ahorro promedio */}
-          {(() => {
-            const validMonths = stats.monthlyData.filter(m => m.income > 0)
-            if (!validMonths.length) return null
-            const avgSavings = validMonths.reduce((s, m) => s + m.savings, 0) / validMonths.length
-            if (avgSavings <= 0) return null
-            return (
-              <p className="text-[10px] mt-3 pt-3" style={{ color: C.dim, borderTop: `1px solid ${C.border}` }}>
-                Ahorro promedio 6 meses:{' '}
-                <span className="font-semibold" style={{ color: C.income }}>
-                  {formatCurrency(avgSavings)}
-                </span>
-              </p>
-            )
-          })()}
         </div>
-      )}
+      </div>
 
-      {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-          10. ÚLTIMOS MOVIMIENTOS (agrupados por día)
-      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-      {grouped.length > 0 && (
-        <div className="rounded-2xl overflow-hidden"
-          style={{ backgroundColor: C.surface, border: `1px solid ${C.border}` }}>
+      {/* ── Recent transactions ──────────────────────────────────── */}
+      <div style={{
+        backgroundColor: C.surface, border: `1px solid ${C.border}`,
+        borderRadius: '12px',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+      }}>
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '20px 24px', borderBottom: `1px solid ${C.border}`,
+        }}>
+          <h3 style={{ fontSize: '14px', fontWeight: 700, color: C.text, margin: 0 }}>Últimos movimientos</h3>
+          <Link href="/expenses" style={{ fontSize: '12px', color: C.green, textDecoration: 'none', fontWeight: 600 }}>
+            Ver todos →
+          </Link>
+        </div>
 
-          <div className="flex items-center justify-between px-4 pt-4 pb-3"
-            style={{ borderBottom: `1px solid ${C.border}` }}>
-            <h2 className="text-[13px] font-bold" style={{ color: C.text }}>Últimos movimientos</h2>
-            <a href="/expenses" className="text-[11px] font-medium" style={{ color: C.brand }}>
-              Ver todos →
-            </a>
+        {stats.recentTransactions.length === 0 ? (
+          <div style={{ padding: '40px', textAlign: 'center' }}>
+            <p style={{ fontSize: '32px', marginBottom: '8px' }}>📋</p>
+            <p style={{ fontSize: '14px', color: C.muted, marginBottom: '4px', fontWeight: 600 }}>Sin movimientos este mes</p>
+            <p style={{ fontSize: '13px', color: C.tertiary }}>Registra tu primer ingreso o gasto</p>
           </div>
-
-          {grouped.map(([date, txs]) => {
-            const dayExpense = txs.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0)
-            const dayIncome  = txs.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0)
-            return (
-              <div key={date}>
-                {/* Cabecera del día */}
-                <div className="flex items-center justify-between px-4 py-2"
-                  style={{ backgroundColor: C.bg }}>
-                  <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: C.muted }}>
-                    {formatRelativeDate(date)}
-                  </span>
-                  <div className="flex items-center gap-2">
-                    {dayIncome  > 0 && <span className="text-[10px] font-semibold" style={{ color: C.income }}>+{fmt(dayIncome)}</span>}
-                    {dayExpense > 0 && <span className="text-[10px] font-semibold" style={{ color: C.expense }}>-{fmt(dayExpense)}</span>}
+        ) : (
+          <div>
+            {stats.recentTransactions.map((tx, idx) => (
+              <div
+                key={tx.id}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '12px',
+                  padding: '12px 24px',
+                  borderBottom: idx < stats.recentTransactions.length - 1 ? `1px solid ${C.border}` : 'none',
+                }}
+              >
+                <div style={{
+                  width: '36px', height: '36px', borderRadius: '9px', flexShrink: 0,
+                  backgroundColor: (tx.category?.color ?? (tx.type === 'income' ? C.green : C.red)) + '18',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: '16px',
+                }}>
+                  {tx.category?.icon ?? (tx.type === 'income' ? '↑' : '↓')}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: '13px', fontWeight: 500, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {tx.description}
+                  </div>
+                  <div style={{ fontSize: '11px', color: C.tertiary }}>
+                    {tx.category?.name ?? (tx.type === 'income' ? 'Ingreso' : 'Sin categoría')} · {formatRelativeDate(tx.date)}
                   </div>
                 </div>
-
-                {/* Lista de transacciones del día */}
-                {txs.map((tx, i) => {
-                  const txColor = tx.category?.color ?? (tx.type === 'income' ? C.income : C.expense)
-                  return (
-                    <div key={tx.id}
-                      className="flex items-center gap-3 px-4 py-2.5"
-                      style={{ borderBottom: i < txs.length - 1 ? `1px solid ${C.border}40` : 'none' }}>
-                      <div className="w-8 h-8 rounded-xl flex items-center justify-center text-sm flex-shrink-0"
-                        style={{ backgroundColor: txColor + '18' }}>
-                        {tx.category?.icon ?? (tx.type === 'income' ? '💰' : '💸')}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[13px] font-medium truncate" style={{ color: C.text }}>
-                          {tx.description}
-                        </p>
-                        <p className="text-[10px] mt-0.5" style={{ color: C.dim }}>
-                          {tx.category?.name ?? (tx.type === 'income' ? 'Ingreso' : 'Sin categoría')}
-                        </p>
-                      </div>
-                      <span className="text-[13px] font-bold flex-shrink-0"
-                        style={{ color: tx.type === 'income' ? C.income : C.text }}>
-                        {tx.type === 'income' ? '+' : '-'}{fmt(tx.amount)}
-                      </span>
-                    </div>
-                  )
-                })}
+                <div style={{
+                  fontSize: '14px', fontWeight: 700,
+                  color: tx.type === 'income' ? C.green : C.red,
+                  flexShrink: 0,
+                }}>
+                  {tx.type === 'income' ? '+' : '−'}{formatCurrency(tx.amount)}
+                </div>
               </div>
-            )
-          })}
-        </div>
-      )}
-
-      {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-          11. EMPTY STATE — Primer uso
-      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-      {stats.totalIncome === 0 && stats.totalExpenses === 0 && (
-        <div className="flex flex-col items-center justify-center gap-5 py-12">
-          <div className="w-16 h-16 rounded-2xl flex items-center justify-center text-3xl"
-            style={{ backgroundColor: 'rgba(52,211,153,0.07)', border: `1px solid rgba(52,211,153,0.15)` }}>
-            🌱
+            ))}
           </div>
-          <div className="text-center max-w-xs">
-            <p className="text-[16px] font-extrabold mb-2" style={{ color: C.text }}>
-              Empieza a ahorrar ahora
-            </p>
-            <p className="text-sm leading-relaxed mb-4" style={{ color: C.muted }}>
-              Registra tu primer ingreso o gasto. Tarda menos de 10 segundos.
-            </p>
-            <div className="flex gap-2 justify-center">
-              <a href="/income"
-                className="flex items-center gap-1.5 px-4 py-2 rounded-xl font-semibold text-sm transition-all active:scale-[0.97]"
-                style={{ backgroundColor: 'rgba(52,211,153,0.1)', border: `1px solid rgba(52,211,153,0.2)`, color: C.income }}>
-                ↑ Ingreso
-              </a>
-              <a href="/expenses"
-                className="flex items-center gap-1.5 px-4 py-2 rounded-xl font-semibold text-sm transition-all active:scale-[0.97]"
-                style={{ backgroundColor: 'rgba(248,113,113,0.1)', border: `1px solid rgba(248,113,113,0.2)`, color: C.expense }}>
-                ↓ Gasto
-              </a>
-            </div>
-          </div>
-        </div>
-      )}
-
+        )}
+      </div>
     </div>
   )
 }

@@ -1,22 +1,16 @@
-import { Sidebar } from '@/components/layout/Sidebar'
-import { FAB } from '@/components/common/FAB'
-import { ProfileLoader } from '@/components/common/ProfileLoader'
-import { Toasts } from '@/components/common/Toasts'
-import { BottomNav } from '@/components/layout/BottomNav'
+import Sidebar from "@/components/layout/Sidebar";
+import { ProfileLoader } from "@/components/common/ProfileLoader";
+import { Toasts } from "@/components/common/Toasts";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen flex" style={{ backgroundColor: '#070e0a' }}>
+    <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: '#F7F8FA' }}>
       <Sidebar />
-      <main className="flex-1 md:ml-[220px] min-w-0">
-        <div className="max-w-2xl mx-auto px-4 py-6">
-          {children}
-        </div>
+      <main style={{ flex: 1, marginLeft: '240px', minHeight: '100vh', overflowY: 'auto' }}>
+        {children}
       </main>
       <ProfileLoader />
       <Toasts />
-      <FAB />
-      <BottomNav />
     </div>
-  )
+  );
 }

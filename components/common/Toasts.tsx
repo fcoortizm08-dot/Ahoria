@@ -8,18 +8,34 @@ export function Toasts() {
   if (!toasts.length) return null
 
   return (
-    <div className="fixed bottom-5 right-5 z-[100] flex flex-col gap-2">
+    <div style={{
+      position: 'fixed', bottom: '20px', right: '20px',
+      zIndex: 100, display: 'flex', flexDirection: 'column', gap: '8px',
+    }}>
       {toasts.map(t => (
         <div
           key={t.id}
           onClick={() => removeToast(t.id)}
-          className={`flex items-center gap-2.5 px-4 py-3 rounded-xl text-sm font-medium shadow-lg cursor-pointer transition-all animate-in slide-in-from-bottom-2 fade-in-0 ${
-            t.type === 'success'
-              ? 'bg-emerald-500/20 border border-emerald-500/30 text-emerald-300'
-              : 'bg-red-500/20 border border-red-500/30 text-red-300'
-          }`}
+          style={{
+            display: 'flex', alignItems: 'center', gap: '10px',
+            padding: '12px 16px', borderRadius: '10px',
+            fontSize: '13px', fontWeight: 500,
+            cursor: 'pointer', boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
+            backgroundColor: t.type === 'success' ? '#ECFDF5' : '#FEF2F2',
+            border: `1px solid ${t.type === 'success' ? '#A7F3D0' : '#FECACA'}`,
+            color: t.type === 'success' ? '#065F46' : '#DC2626',
+            animation: 'fadeIn 0.2s ease-out',
+            minWidth: '240px',
+          }}
         >
-          <span>{t.type === 'success' ? '✓' : '✕'}</span>
+          <span style={{
+            width: '20px', height: '20px', borderRadius: '999px', flexShrink: 0,
+            backgroundColor: t.type === 'success' ? '#10B981' : '#EF4444',
+            color: '#FFFFFF', fontSize: '11px', fontWeight: 700,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            {t.type === 'success' ? '✓' : '✕'}
+          </span>
           {t.message}
         </div>
       ))}

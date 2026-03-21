@@ -7,12 +7,35 @@ import { useFinanceStore } from '@/store/useFinanceStore'
 import { MonthSelector } from '@/components/common/MonthSelector'
 import type { Transaction, Category } from '@/types'
 
+const C = {
+  bg: '#F7F8FA', surface: '#FFFFFF', border: '#E5E7EB',
+  green: '#10B981', greenDk: '#059669', greenBg: '#ECFDF5',
+  text: '#111827', muted: '#6B7280', tertiary: '#9CA3AF',
+  red: '#EF4444',
+}
+
+const inputStyle: React.CSSProperties = {
+  width: '100%', padding: '9px 12px',
+  border: `1px solid ${C.border}`, borderRadius: '8px',
+  backgroundColor: '#FFFFFF', color: C.text,
+  fontSize: '13px', outline: 'none',
+  transition: 'border-color 0.15s ease',
+}
+
+const labelStyle: React.CSSProperties = {
+  display: 'block', fontSize: '12px',
+  fontWeight: 600, color: C.muted, marginBottom: '6px',
+}
+
 export default function IncomePage() {
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState({ description: '', amount: '', category_id: '', date: new Date().toISOString().split('T')[0], notes: '' })
+  const [form, setForm] = useState({
+    description: '', amount: '', category_id: '',
+    date: new Date().toISOString().split('T')[0], notes: '',
+  })
   const [saving, setSaving] = useState(false)
   const { activeYear, activeMonth, addToast } = useFinanceStore()
 
@@ -23,7 +46,7 @@ export default function IncomePage() {
     if (!user) return
 
     const start = new Date(activeYear, activeMonth, 1).toISOString().split('T')[0]
-    const end = new Date(activeYear, activeMonth + 1, 0).toISOString().split('T')[0]
+    const end   = new Date(activeYear, activeMonth + 1, 0).toISOString().split('T')[0]
 
     const [{ data: txs }, { data: cats }] = await Promise.all([
       supabase.from('transactions').select('*, category:categories(*)')
@@ -40,6 +63,9 @@ export default function IncomePage() {
   useEffect(() => { fetchData() }, [fetchData])
 
   const total = transactions.reduce((s, t) => s + t.amount, 0)
+  const recurring = transactions.filter(t => t.is_recurring).reduce((s, t) => s + t.amount, 0)
+  const daysInMonth = new Date(activeYear, activeMonth + 1, 0).getDate()
+  const dailyAvg = total / daysInMonth
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -71,103 +97,249 @@ export default function IncomePage() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex items-start justify-between gap-4 flex-wrap">
+    <div style={{ padding: '32px 40px', maxWidth: '1200px', margin: '0 auto' }}>
+
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '24px' }}>
         <div>
-          <h1 className="text-xl font-extrabold text-white">Ingresos</h1>
-          <p className="text-slate-400 text-sm mt-0.5">
-            Total: <span className="text-emerald-400 font-semibold">{formatCurrency(total)}</span>
+          <h1 style={{ fontSize: '22px', fontWeight: 800, color: C.text, margin: 0 }}>Ingresos</h1>
+          <p style={{ fontSize: '13px', color: C.muted, marginTop: '4px' }}>
+            Total del mes:{' '}
+            <span style={{ color: C.green, fontWeight: 700 }}>{formatCurrency(total)}</span>
           </p>
         </div>
-        <div className="flex items-center gap-3 flex-wrap">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <MonthSelector />
-          <button onClick={() => setShowForm(!showForm)} className="bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-xl px-4 py-2 text-sm transition-all">
-            + Agregar
+          <button
+            onClick={() => setShowForm(!showForm)}
+            style={{
+              backgroundColor: C.green, color: '#FFFFFF',
+              padding: '8px 16px', borderRadius: '8px',
+              fontSize: '13px', fontWeight: 600, border: 'none',
+              cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px',
+              boxShadow: '0 2px 4px rgba(16,185,129,0.25)',
+            }}
+          >
+            + Agregar ingreso
           </button>
         </div>
       </div>
 
+      {/* KPI row */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '24px' }}>
+        {[
+          { label: 'Total del mes', value: formatCurrency(total), color: C.green },
+          { label: 'Ingresos recurrentes', value: formatCurrency(recurring), color: C.muted },
+          { label: 'Promedio diario', value: formatCurrency(Math.round(dailyAvg)), color: C.muted },
+        ].map(kpi => (
+          <div key={kpi.label} style={{
+            backgroundColor: C.surface, border: `1px solid ${C.border}`,
+            borderRadius: '12px', padding: '20px 24px',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+          }}>
+            <div style={{ fontSize: '11px', fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>
+              {kpi.label}
+            </div>
+            <div style={{ fontSize: '22px', fontWeight: 800, color: kpi.color }}>
+              {kpi.value}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Add form modal-style */}
       {showForm && (
-        <form onSubmit={handleSubmit} className="bg-[#0d1117] rounded-xl border border-[#1e2d45] p-5 flex flex-col gap-4">
-          <h2 className="text-sm font-semibold text-white">Nuevo ingreso</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-400 mb-1.5">Descripción *</label>
-              <input value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} required placeholder="Ej: Salario" className="w-full bg-[#111827] border border-[#1e2d45] rounded-xl px-3.5 py-2.5 text-sm text-white placeholder:text-slate-600 outline-none focus:border-blue-500 transition-all" />
+        <div style={{
+          backgroundColor: C.surface, border: `1px solid ${C.border}`,
+          borderRadius: '12px', padding: '24px',
+          boxShadow: '0 4px 16px rgba(0,0,0,0.08)',
+          marginBottom: '24px',
+        }}>
+          <h2 style={{ fontSize: '15px', fontWeight: 700, color: C.text, marginTop: 0, marginBottom: '20px' }}>
+            Nuevo ingreso
+          </h2>
+          <form onSubmit={handleSubmit}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+              <div style={{ gridColumn: '1 / -1' }}>
+                <label style={labelStyle}>Descripción *</label>
+                <input
+                  value={form.description}
+                  onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+                  required placeholder="Ej: Salario enero"
+                  style={inputStyle}
+                />
+              </div>
+              <div>
+                <label style={labelStyle}>Monto (CLP) *</label>
+                <input
+                  type="number" value={form.amount}
+                  onChange={e => setForm(f => ({ ...f, amount: e.target.value }))}
+                  required min="1" placeholder="1000000"
+                  style={inputStyle}
+                />
+              </div>
+              <div>
+                <label style={labelStyle}>Fecha *</label>
+                <input
+                  type="date" value={form.date}
+                  onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
+                  required style={inputStyle}
+                />
+              </div>
+              <div>
+                <label style={labelStyle}>Categoría</label>
+                <select
+                  value={form.category_id}
+                  onChange={e => setForm(f => ({ ...f, category_id: e.target.value }))}
+                  style={inputStyle}
+                >
+                  <option value="">Sin categoría</option>
+                  {categories.map(c => (
+                    <option key={c.id} value={c.id}>{c.icon} {c.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label style={labelStyle}>Notas</label>
+                <input
+                  value={form.notes}
+                  onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
+                  placeholder="Opcional"
+                  style={inputStyle}
+                />
+              </div>
             </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-400 mb-1.5">Monto (CLP) *</label>
-              <input type="number" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} required min="1" placeholder="1000000" className="w-full bg-[#111827] border border-[#1e2d45] rounded-xl px-3.5 py-2.5 text-sm text-white placeholder:text-slate-600 outline-none focus:border-blue-500 transition-all" />
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <button
+                type="button" onClick={() => setShowForm(false)}
+                style={{
+                  padding: '8px 16px', borderRadius: '8px', fontSize: '13px',
+                  fontWeight: 500, color: C.muted, border: `1px solid ${C.border}`,
+                  backgroundColor: 'transparent', cursor: 'pointer',
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit" disabled={saving}
+                style={{
+                  padding: '8px 20px', borderRadius: '8px', fontSize: '13px',
+                  fontWeight: 600, color: '#FFFFFF', backgroundColor: C.green,
+                  border: 'none', cursor: 'pointer', opacity: saving ? 0.6 : 1,
+                }}
+              >
+                {saving ? 'Guardando...' : 'Guardar ingreso'}
+              </button>
             </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-400 mb-1.5">Fecha *</label>
-              <input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} required className="w-full bg-[#111827] border border-[#1e2d45] rounded-xl px-3.5 py-2.5 text-sm text-white outline-none focus:border-blue-500 transition-all" />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-400 mb-1.5">Categoría</label>
-              <select value={form.category_id} onChange={e => setForm(f => ({ ...f, category_id: e.target.value }))} className="w-full bg-[#111827] border border-[#1e2d45] rounded-xl px-3.5 py-2.5 text-sm text-white outline-none focus:border-blue-500 transition-all">
-                <option value="">Sin categoría</option>
-                {categories.map(c => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
-              </select>
-            </div>
-            <div className="sm:col-span-2">
-              <label className="block text-xs font-semibold text-slate-400 mb-1.5">Notas</label>
-              <input value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Opcional" className="w-full bg-[#111827] border border-[#1e2d45] rounded-xl px-3.5 py-2.5 text-sm text-white placeholder:text-slate-600 outline-none focus:border-blue-500 transition-all" />
-            </div>
-          </div>
-          <div className="flex gap-3 justify-end">
-            <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 text-sm text-slate-400 hover:text-white transition-all">Cancelar</button>
-            <button type="submit" disabled={saving} className="bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-xl px-4 py-2 text-sm transition-all disabled:opacity-60">
-              {saving ? 'Guardando...' : 'Guardar'}
-            </button>
-          </div>
-        </form>
+          </form>
+        </div>
       )}
 
-      <div className="bg-[#0d1117] rounded-xl border border-[#1e2d45] overflow-hidden">
+      {/* Transaction list */}
+      <div style={{
+        backgroundColor: C.surface, border: `1px solid ${C.border}`,
+        borderRadius: '12px',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+        overflow: 'hidden',
+      }}>
         {isLoading ? (
-          <div className="p-8 text-center text-slate-500 text-sm">Cargando...</div>
+          <div style={{ padding: '40px', textAlign: 'center', color: C.tertiary, fontSize: '14px' }}>
+            Cargando...
+          </div>
         ) : transactions.length === 0 ? (
-          <div className="p-8 text-center">
-            <p className="text-slate-500 text-sm">No hay ingresos en este mes.</p>
-            <button onClick={() => setShowForm(true)} className="mt-2 text-blue-400 hover:text-blue-300 text-sm font-semibold">+ Agregar el primero</button>
+          <div style={{ padding: '60px', textAlign: 'center' }}>
+            <p style={{ fontSize: '40px', marginBottom: '12px' }}>💰</p>
+            <p style={{ fontSize: '15px', fontWeight: 600, color: C.muted, marginBottom: '4px' }}>
+              Sin ingresos este mes
+            </p>
+            <p style={{ fontSize: '13px', color: C.tertiary, marginBottom: '16px' }}>
+              Registra tu primer ingreso para empezar a llevar el control
+            </p>
+            <button
+              onClick={() => setShowForm(true)}
+              style={{
+                backgroundColor: C.green, color: '#FFFFFF',
+                padding: '8px 20px', borderRadius: '8px',
+                fontSize: '13px', fontWeight: 600, border: 'none', cursor: 'pointer',
+              }}
+            >
+              + Agregar el primero
+            </button>
           </div>
         ) : (
-          <table className="w-full">
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
-              <tr className="border-b border-[#1e2d45]">
-                <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400">Descripción</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 hidden sm:table-cell">Categoría</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 hidden sm:table-cell">Fecha</th>
-                <th className="text-right px-4 py-3 text-xs font-semibold text-slate-400">Monto</th>
-                <th className="px-4 py-3 w-8" />
+              <tr style={{ borderBottom: `1px solid ${C.border}` }}>
+                {['Descripción', 'Categoría', 'Fecha', 'Monto', ''].map((h, i) => (
+                  <th key={i} style={{
+                    padding: '12px 20px', textAlign: i === 3 ? 'right' : 'left',
+                    fontSize: '11px', fontWeight: 700, color: C.muted,
+                    textTransform: 'uppercase', letterSpacing: '0.5px',
+                  }}>
+                    {h}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
-              {transactions.map(tx => (
-                <tr key={tx.id} className="border-b border-[#1e2d45] last:border-0 hover:bg-white/[0.02]">
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <div className="w-7 h-7 rounded-lg flex items-center justify-center text-sm flex-shrink-0" style={{ background: (tx.category?.color ?? '#10b981') + '20' }}>
+              {transactions.map((tx, idx) => (
+                <tr
+                  key={tx.id}
+                  style={{
+                    borderBottom: idx < transactions.length - 1 ? `1px solid ${C.border}` : 'none',
+                  }}
+                >
+                  <td style={{ padding: '12px 20px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <div style={{
+                        width: '32px', height: '32px', borderRadius: '8px', flexShrink: 0,
+                        backgroundColor: (tx.category?.color ?? C.green) + '18',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: '14px',
+                      }}>
                         {tx.category?.icon ?? '↑'}
                       </div>
-                      <span className="text-sm text-white">{tx.description}</span>
+                      <span style={{ fontSize: '13px', fontWeight: 500, color: C.text }}>{tx.description}</span>
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-xs text-slate-400 hidden sm:table-cell">{tx.category ? `${tx.category.name}` : '—'}</td>
-                  <td className="px-4 py-3 text-xs text-slate-400 hidden sm:table-cell">{formatDate(tx.date)}</td>
-                  <td className="px-4 py-3 text-sm font-semibold text-emerald-400 text-right">{formatCurrency(tx.amount)}</td>
-                  <td className="px-4 py-3 text-right">
-                    <button onClick={() => handleDelete(tx.id)} className="text-slate-600 hover:text-red-400 text-xs transition-all">✕</button>
+                  <td style={{ padding: '12px 20px', fontSize: '12px', color: C.tertiary }}>
+                    {tx.category?.name ?? '—'}
+                  </td>
+                  <td style={{ padding: '12px 20px', fontSize: '12px', color: C.tertiary }}>
+                    {formatDate(tx.date)}
+                  </td>
+                  <td style={{ padding: '12px 20px', textAlign: 'right' }}>
+                    <span style={{ fontSize: '14px', fontWeight: 700, color: C.green }}>
+                      +{formatCurrency(tx.amount)}
+                    </span>
+                  </td>
+                  <td style={{ padding: '12px 20px', textAlign: 'right' }}>
+                    <button
+                      onClick={() => handleDelete(tx.id)}
+                      style={{
+                        background: 'none', border: 'none', cursor: 'pointer',
+                        fontSize: '14px', color: C.tertiary, padding: '4px',
+                        borderRadius: '4px', transition: 'color 0.15s',
+                      }}
+                      onMouseEnter={e => (e.currentTarget.style.color = C.red)}
+                      onMouseLeave={e => (e.currentTarget.style.color = C.tertiary)}
+                    >
+                      ✕
+                    </button>
                   </td>
                 </tr>
               ))}
             </tbody>
             <tfoot>
-              <tr className="border-t border-[#1e2d45]">
-                <td colSpan={3} className="px-4 py-3 text-xs font-semibold text-slate-400 hidden sm:table-cell">Total</td>
-                <td colSpan={1} className="px-4 py-3 text-xs font-semibold text-slate-400 sm:hidden">Total</td>
-                <td className="px-4 py-3 text-sm font-extrabold text-emerald-400 text-right">{formatCurrency(total)}</td>
+              <tr style={{ borderTop: `1px solid ${C.border}`, backgroundColor: '#F9FAFB' }}>
+                <td colSpan={3} style={{ padding: '12px 20px', fontSize: '12px', fontWeight: 700, color: C.muted }}>
+                  Total del mes
+                </td>
+                <td style={{ padding: '12px 20px', textAlign: 'right' }}>
+                  <span style={{ fontSize: '15px', fontWeight: 800, color: C.green }}>
+                    {formatCurrency(total)}
+                  </span>
+                </td>
                 <td />
               </tr>
             </tfoot>

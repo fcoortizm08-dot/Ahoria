@@ -6,12 +6,45 @@ import { formatCurrency } from '@/lib/utils'
 import { useFinanceStore } from '@/store/useFinanceStore'
 import type { Debt } from '@/types'
 
+const C = {
+  surface: '#FFFFFF', border: '#E5E7EB',
+  amber: '#F59E0B', amberBg: '#FFFBEB',
+  green: '#10B981', greenBg: '#ECFDF5',
+  red: '#EF4444', redBg: '#FEF2F2',
+  blue: '#3B82F6', blueBg: '#EFF6FF',
+  text: '#111827', muted: '#6B7280', tertiary: '#9CA3AF',
+}
+
+const inputStyle: React.CSSProperties = {
+  width: '100%', padding: '9px 12px',
+  border: `1px solid ${C.border}`, borderRadius: '8px',
+  backgroundColor: '#FFFFFF', color: C.text,
+  fontSize: '13px', outline: 'none',
+}
+
+const labelStyle: React.CSSProperties = {
+  display: 'block', fontSize: '12px', fontWeight: 600,
+  color: C.muted, marginBottom: '6px',
+}
+
+const DEBT_TYPE_LABELS: Record<string, string> = {
+  formal: 'Préstamo formal',
+  informal: 'Préstamo informal',
+  bnpl: 'Cuotas/BNPL',
+  credit_card: 'Tarjeta de crédito',
+}
+
 export default function DebtsPage() {
   const [debts, setDebts] = useState<Debt[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState({ name: '', total_amount: '', current_balance: '', interest_rate: '', minimum_payment: '', due_day: '' })
+  const [form, setForm] = useState({
+    name: '', total_amount: '', current_balance: '',
+    interest_rate: '', minimum_payment: '', due_day: '', debt_type: 'credit_card',
+  })
   const [saving, setSaving] = useState(false)
+  const [paymentDebtId, setPaymentDebtId] = useState<string | null>(null)
+  const [paymentAmount, setPaymentAmount] = useState('')
   const { addToast } = useFinanceStore()
 
   const fetchDebts = useCallback(async () => {
@@ -25,9 +58,11 @@ export default function DebtsPage() {
 
   useEffect(() => { fetchDebts() }, [fetchDebts])
 
-  const activeDebts = debts.filter(d => d.status === 'active')
-  const totalDebt = activeDebts.reduce((s, d) => s + d.current_balance, 0)
-  const totalMinPayment = activeDebts.reduce((s, d) => s + d.minimum_payment, 0)
+  const activeDebts    = debts.filter(d => d.status === 'active')
+  const totalDebt      = activeDebts.reduce((s, d) => s + d.current_balance, 0)
+  const totalPaid      = debts.reduce((s, d) => s + (d.total_amount - d.current_balance), 0)
+  const totalMinPay    = activeDebts.reduce((s, d) => s + d.minimum_payment, 0)
+  const snowballTarget = activeDebts.sort((a, b) => a.current_balance - b.current_balance)[0]
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -37,6 +72,7 @@ export default function DebtsPage() {
     if (!user) return
     const { error } = await supabase.from('debts').insert({
       user_id: user.id, name: form.name,
+      debt_type: form.debt_type,
       total_amount: Number(form.total_amount),
       current_balance: Number(form.current_balance),
       interest_rate: Number(form.interest_rate) || 0,
@@ -47,11 +83,25 @@ export default function DebtsPage() {
     if (error) { addToast('Error al guardar la deuda', 'error') }
     else {
       addToast('Deuda registrada correctamente')
-      setForm({ name: '', total_amount: '', current_balance: '', interest_rate: '', minimum_payment: '', due_day: '' })
+      setForm({ name: '', total_amount: '', current_balance: '', interest_rate: '', minimum_payment: '', due_day: '', debt_type: 'credit_card' })
       setShowForm(false)
       fetchDebts()
     }
     setSaving(false)
+  }
+
+  const handleRegisterPayment = async (debt: Debt) => {
+    if (!paymentAmount || Number(paymentAmount) <= 0) return
+    const supabase = createClient()
+    const newBalance = Math.max(debt.current_balance - Number(paymentAmount), 0)
+    const newStatus  = newBalance === 0 ? 'paid' : 'active'
+    await supabase.from('debts').update({
+      current_balance: newBalance, status: newStatus, updated_at: new Date().toISOString(),
+    }).eq('id', debt.id)
+    addToast(newStatus === 'paid' ? `¡Deuda "${debt.name}" pagada! 🎉` : `Pago de ${formatCurrency(Number(paymentAmount))} registrado`)
+    setPaymentDebtId(null)
+    setPaymentAmount('')
+    fetchDebts()
   }
 
   const handleMarkPaid = async (id: string) => {
@@ -69,104 +119,332 @@ export default function DebtsPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex items-start justify-between gap-4 flex-wrap">
+    <div style={{ padding: '32px 40px', maxWidth: '1200px', margin: '0 auto' }}>
+
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '24px' }}>
         <div>
-          <h1 className="text-xl font-extrabold text-white">Deudas</h1>
-          <p className="text-slate-400 text-sm mt-0.5">
-            Total adeudado: <span className="text-red-400 font-semibold">{formatCurrency(totalDebt)}</span>
-            {totalMinPayment > 0 && <> · Pago mín/mes: <span className="text-amber-400 font-semibold">{formatCurrency(totalMinPayment)}</span></>}
+          <h1 style={{ fontSize: '22px', fontWeight: 800, color: C.text, margin: 0 }}>Mis deudas</h1>
+          <p style={{ fontSize: '13px', color: C.muted, marginTop: '4px' }}>
+            Controla lo que debes y traza un plan para pagarlo
           </p>
         </div>
-        <button onClick={() => setShowForm(!showForm)} className="bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-xl px-4 py-2 text-sm transition-all">
+        <button
+          onClick={() => setShowForm(!showForm)}
+          style={{
+            backgroundColor: C.amber, color: '#FFFFFF',
+            padding: '8px 16px', borderRadius: '8px',
+            fontSize: '13px', fontWeight: 600, border: 'none',
+            cursor: 'pointer', boxShadow: '0 2px 4px rgba(245,158,11,0.25)',
+          }}
+        >
           + Agregar deuda
         </button>
       </div>
 
-      {showForm && (
-        <form onSubmit={handleSubmit} className="bg-[#0d1117] rounded-xl border border-[#1e2d45] p-5 flex flex-col gap-4">
-          <h2 className="text-sm font-semibold text-white">Nueva deuda</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="sm:col-span-2">
-              <label className="block text-xs font-semibold text-slate-400 mb-1.5">Nombre *</label>
-              <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required placeholder="Ej: Tarjeta de crédito BCI" className="w-full bg-[#111827] border border-[#1e2d45] rounded-xl px-3.5 py-2.5 text-sm text-white placeholder:text-slate-600 outline-none focus:border-blue-500 transition-all" />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-400 mb-1.5">Monto total (CLP) *</label>
-              <input type="number" value={form.total_amount} onChange={e => setForm(f => ({ ...f, total_amount: e.target.value }))} required min="1" placeholder="1000000" className="w-full bg-[#111827] border border-[#1e2d45] rounded-xl px-3.5 py-2.5 text-sm text-white placeholder:text-slate-600 outline-none focus:border-blue-500 transition-all" />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-400 mb-1.5">Saldo actual (CLP) *</label>
-              <input type="number" value={form.current_balance} onChange={e => setForm(f => ({ ...f, current_balance: e.target.value }))} required min="0" placeholder="800000" className="w-full bg-[#111827] border border-[#1e2d45] rounded-xl px-3.5 py-2.5 text-sm text-white placeholder:text-slate-600 outline-none focus:border-blue-500 transition-all" />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-400 mb-1.5">Tasa de interés (% mensual)</label>
-              <input type="number" value={form.interest_rate} onChange={e => setForm(f => ({ ...f, interest_rate: e.target.value }))} min="0" step="0.01" placeholder="2.5" className="w-full bg-[#111827] border border-[#1e2d45] rounded-xl px-3.5 py-2.5 text-sm text-white placeholder:text-slate-600 outline-none focus:border-blue-500 transition-all" />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-400 mb-1.5">Pago mínimo mensual (CLP)</label>
-              <input type="number" value={form.minimum_payment} onChange={e => setForm(f => ({ ...f, minimum_payment: e.target.value }))} min="0" placeholder="50000" className="w-full bg-[#111827] border border-[#1e2d45] rounded-xl px-3.5 py-2.5 text-sm text-white placeholder:text-slate-600 outline-none focus:border-blue-500 transition-all" />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-400 mb-1.5">Día de vencimiento</label>
-              <input type="number" value={form.due_day} onChange={e => setForm(f => ({ ...f, due_day: e.target.value }))} min="1" max="31" placeholder="15" className="w-full bg-[#111827] border border-[#1e2d45] rounded-xl px-3.5 py-2.5 text-sm text-white placeholder:text-slate-600 outline-none focus:border-blue-500 transition-all" />
+      {/* Hero stats */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '24px' }}>
+        <div style={{
+          backgroundColor: C.surface, border: `1px solid ${C.border}`,
+          borderRadius: '12px', padding: '20px 24px',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+        }}>
+          <div style={{ fontSize: '11px', fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>
+            Total adeudado
+          </div>
+          <div style={{ fontSize: '28px', fontWeight: 900, color: C.amber }}>{formatCurrency(totalDebt)}</div>
+        </div>
+        <div style={{
+          backgroundColor: C.surface, border: `1px solid ${C.border}`,
+          borderRadius: '12px', padding: '20px 24px',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+        }}>
+          <div style={{ fontSize: '11px', fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>
+            Total pagado
+          </div>
+          <div style={{ fontSize: '22px', fontWeight: 800, color: C.green }}>{formatCurrency(totalPaid)}</div>
+        </div>
+        <div style={{
+          backgroundColor: C.surface, border: `1px solid ${C.border}`,
+          borderRadius: '12px', padding: '20px 24px',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+        }}>
+          <div style={{ fontSize: '11px', fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>
+            Pago mínimo mensual
+          </div>
+          <div style={{ fontSize: '22px', fontWeight: 800, color: C.red }}>{formatCurrency(totalMinPay)}</div>
+        </div>
+      </div>
+
+      {/* Strategy card */}
+      {snowballTarget && (
+        <div style={{
+          backgroundColor: '#FFFBEB', border: '1px solid #FDE68A',
+          borderRadius: '12px', padding: '16px 20px',
+          marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '12px',
+        }}>
+          <span style={{ fontSize: '24px' }}>⛄</span>
+          <div>
+            <div style={{ fontSize: '13px', fontWeight: 700, color: '#92400E' }}>Estrategia bola de nieve</div>
+            <div style={{ fontSize: '12px', color: '#B45309' }}>
+              Enfócate en <strong>"{snowballTarget.name}"</strong> ({formatCurrency(snowballTarget.current_balance)}).
+              Es tu deuda más pequeña — págarla primero te dará motivación para las siguientes.
             </div>
           </div>
-          <div className="flex gap-3 justify-end">
-            <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 text-sm text-slate-400 hover:text-white transition-all">Cancelar</button>
-            <button type="submit" disabled={saving} className="bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-xl px-4 py-2 text-sm transition-all disabled:opacity-60">
-              {saving ? 'Guardando...' : 'Guardar'}
-            </button>
-          </div>
-        </form>
+        </div>
       )}
 
+      {/* Add form */}
+      {showForm && (
+        <div style={{
+          backgroundColor: C.surface, border: `1px solid ${C.border}`,
+          borderRadius: '12px', padding: '24px',
+          boxShadow: '0 4px 16px rgba(0,0,0,0.08)',
+          marginBottom: '24px',
+        }}>
+          <h2 style={{ fontSize: '15px', fontWeight: 700, color: C.text, marginTop: 0, marginBottom: '20px' }}>
+            Nueva deuda
+          </h2>
+          <form onSubmit={handleSubmit}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+              <div style={{ gridColumn: '1 / -1' }}>
+                <label style={labelStyle}>Nombre *</label>
+                <input
+                  value={form.name}
+                  onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                  required placeholder="Ej: Tarjeta de crédito BCI"
+                  style={inputStyle}
+                />
+              </div>
+              <div>
+                <label style={labelStyle}>Tipo de deuda</label>
+                <select
+                  value={form.debt_type}
+                  onChange={e => setForm(f => ({ ...f, debt_type: e.target.value }))}
+                  style={inputStyle}
+                >
+                  {Object.entries(DEBT_TYPE_LABELS).map(([v, l]) => (
+                    <option key={v} value={v}>{l}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label style={labelStyle}>Monto total (CLP) *</label>
+                <input type="number" value={form.total_amount} onChange={e => setForm(f => ({ ...f, total_amount: e.target.value }))} required min="1" placeholder="1000000" style={inputStyle} />
+              </div>
+              <div>
+                <label style={labelStyle}>Saldo actual (CLP) *</label>
+                <input type="number" value={form.current_balance} onChange={e => setForm(f => ({ ...f, current_balance: e.target.value }))} required min="0" placeholder="800000" style={inputStyle} />
+              </div>
+              <div>
+                <label style={labelStyle}>Tasa de interés (% mensual)</label>
+                <input type="number" value={form.interest_rate} onChange={e => setForm(f => ({ ...f, interest_rate: e.target.value }))} min="0" step="0.01" placeholder="2.5" style={inputStyle} />
+              </div>
+              <div>
+                <label style={labelStyle}>Pago mínimo mensual (CLP)</label>
+                <input type="number" value={form.minimum_payment} onChange={e => setForm(f => ({ ...f, minimum_payment: e.target.value }))} min="0" placeholder="50000" style={inputStyle} />
+              </div>
+              <div>
+                <label style={labelStyle}>Día de vencimiento</label>
+                <input type="number" value={form.due_day} onChange={e => setForm(f => ({ ...f, due_day: e.target.value }))} min="1" max="31" placeholder="15" style={inputStyle} />
+              </div>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <button
+                type="button" onClick={() => setShowForm(false)}
+                style={{
+                  padding: '8px 16px', borderRadius: '8px', fontSize: '13px',
+                  fontWeight: 500, color: C.muted, border: `1px solid ${C.border}`,
+                  backgroundColor: 'transparent', cursor: 'pointer',
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit" disabled={saving}
+                style={{
+                  padding: '8px 20px', borderRadius: '8px', fontSize: '13px',
+                  fontWeight: 600, color: '#FFFFFF', backgroundColor: C.amber,
+                  border: 'none', cursor: 'pointer', opacity: saving ? 0.6 : 1,
+                }}
+              >
+                {saving ? 'Guardando...' : 'Guardar deuda'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Debt cards */}
       {isLoading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {[1,2].map(i => <div key={i} className="h-40 bg-[#0d1117] rounded-xl border border-[#1e2d45] animate-pulse" />)}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
+          {[1,2].map(i => (
+            <div key={i} style={{ height: '180px', backgroundColor: C.surface, borderRadius: '12px', border: `1px solid ${C.border}` }} />
+          ))}
         </div>
       ) : debts.length === 0 ? (
-        <div className="bg-[#0d1117] rounded-xl border border-[#1e2d45] p-12 text-center">
-          <p className="text-3xl mb-3">💳</p>
-          <p className="text-slate-400 text-sm">No tienes deudas registradas.</p>
-          <button onClick={() => setShowForm(true)} className="mt-2 text-blue-400 hover:text-blue-300 text-sm font-semibold">+ Agregar primera deuda</button>
+        <div style={{
+          backgroundColor: C.surface, border: `1px solid ${C.border}`,
+          borderRadius: '12px', padding: '60px', textAlign: 'center',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+        }}>
+          <p style={{ fontSize: '48px', marginBottom: '12px' }}>✓</p>
+          <p style={{ fontSize: '16px', fontWeight: 700, color: C.green, marginBottom: '8px' }}>
+            ¡Sin deudas registradas!
+          </p>
+          <p style={{ fontSize: '13px', color: C.muted, marginBottom: '20px' }}>
+            Si tienes deudas, registrarlas te ayuda a planificar su pago.
+          </p>
+          <button
+            onClick={() => setShowForm(true)}
+            style={{
+              backgroundColor: C.amber, color: '#FFFFFF',
+              padding: '10px 24px', borderRadius: '8px',
+              fontSize: '13px', fontWeight: 600, border: 'none', cursor: 'pointer',
+            }}
+          >
+            + Agregar primera deuda
+          </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
           {debts.map(debt => {
-            const progress = debt.total_amount > 0 ? Math.min(Math.round(((debt.total_amount - debt.current_balance) / debt.total_amount) * 100), 100) : 0
+            const progress = debt.total_amount > 0
+              ? Math.min(Math.round(((debt.total_amount - debt.current_balance) / debt.total_amount) * 100), 100)
+              : 0
             const isPaid = debt.status === 'paid'
+
             return (
-              <div key={debt.id} className={`bg-[#0d1117] rounded-xl border p-5 flex flex-col gap-3 ${isPaid ? 'border-emerald-500/20 opacity-70' : 'border-[#1e2d45]'}`}>
-                <div className="flex items-start justify-between">
+              <div
+                key={debt.id}
+                style={{
+                  backgroundColor: C.surface,
+                  border: `1px solid ${isPaid ? '#A7F3D0' : C.border}`,
+                  borderRadius: '12px', padding: '24px',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+                  opacity: isPaid ? 0.8 : 1,
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '16px' }}>
                   <div>
-                    <p className="text-sm font-semibold text-white">{debt.name}</p>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      {isPaid
-                        ? <span className="text-[10px] bg-emerald-500/10 text-emerald-400 rounded-full px-2 py-0.5 border border-emerald-500/20">Pagada ✓</span>
-                        : debt.due_day && <span className="text-[10px] text-slate-500">Vence día {debt.due_day}</span>
-                      }
-                      {!isPaid && debt.interest_rate > 0 && <span className="text-[10px] text-slate-500">{debt.interest_rate}% mensual</span>}
+                    <div style={{ fontSize: '15px', fontWeight: 700, color: C.text }}>{debt.name}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
+                      <span style={{
+                        fontSize: '10px', fontWeight: 600, padding: '2px 8px', borderRadius: '999px',
+                        backgroundColor: isPaid ? C.greenBg : C.amberBg,
+                        color: isPaid ? C.green : C.amber,
+                        border: `1px solid ${isPaid ? '#A7F3D0' : '#FDE68A'}`,
+                      }}>
+                        {isPaid ? 'Pagada ✓' : DEBT_TYPE_LABELS[debt.debt_type] ?? 'Deuda'}
+                      </span>
+                      {!isPaid && debt.due_day && (
+                        <span style={{ fontSize: '11px', color: C.tertiary }}>Vence día {debt.due_day}</span>
+                      )}
+                      {!isPaid && debt.interest_rate > 0 && (
+                        <span style={{ fontSize: '11px', color: C.tertiary }}>{debt.interest_rate}% mensual</span>
+                      )}
                     </div>
                   </div>
-                  <div className="flex gap-2 items-center">
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                     {!isPaid && (
-                      <button onClick={() => handleMarkPaid(debt.id)} className="text-xs text-emerald-500 hover:text-emerald-400 transition-all font-medium">✓ Pagar</button>
+                      <button
+                        onClick={() => handleMarkPaid(debt.id)}
+                        style={{
+                          fontSize: '11px', fontWeight: 600, color: C.green,
+                          background: 'none', border: 'none', cursor: 'pointer', padding: '4px 8px',
+                          borderRadius: '6px', backgroundColor: C.greenBg,
+                        }}
+                      >
+                        ✓ Pagado
+                      </button>
                     )}
-                    <button onClick={() => handleDelete(debt.id)} className="text-slate-600 hover:text-red-400 text-xs transition-all">✕</button>
+                    <button
+                      onClick={() => handleDelete(debt.id)}
+                      style={{
+                        background: 'none', border: 'none', cursor: 'pointer',
+                        fontSize: '14px', color: C.tertiary, padding: '4px',
+                      }}
+                      onMouseEnter={e => (e.currentTarget.style.color = C.red)}
+                      onMouseLeave={e => (e.currentTarget.style.color = C.tertiary)}
+                    >
+                      ✕
+                    </button>
                   </div>
                 </div>
-                <div className="flex justify-between text-xs">
-                  <span className="text-slate-400">Saldo: <span className={`font-semibold ${isPaid ? 'text-emerald-400' : 'text-red-400'}`}>{formatCurrency(debt.current_balance)}</span></span>
-                  <span className="text-slate-500">de {formatCurrency(debt.total_amount)}</span>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                  <div>
+                    <div style={{ fontSize: '11px', color: C.tertiary }}>Saldo restante</div>
+                    <div style={{ fontSize: '20px', fontWeight: 800, color: isPaid ? C.green : C.amber }}>
+                      {formatCurrency(debt.current_balance)}
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontSize: '11px', color: C.tertiary }}>Total original</div>
+                    <div style={{ fontSize: '14px', fontWeight: 600, color: C.muted }}>
+                      {formatCurrency(debt.total_amount)}
+                    </div>
+                  </div>
                 </div>
-                <div className="w-full bg-[#1e2d45] rounded-full h-2">
-                  <div className={`h-2 rounded-full transition-all ${isPaid ? 'bg-emerald-500' : 'bg-blue-500'}`} style={{ width: `${progress}%` }} />
+
+                <div style={{ height: '6px', backgroundColor: '#E5E7EB', borderRadius: '999px', marginBottom: '6px' }}>
+                  <div style={{
+                    height: '6px', borderRadius: '999px',
+                    backgroundColor: isPaid ? C.green : C.blue,
+                    width: `${progress}%`,
+                  }} />
                 </div>
-                <div className="flex justify-between text-[10px] text-slate-500">
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: C.tertiary, marginBottom: '16px' }}>
                   <span>{progress}% pagado</span>
-                  {!isPaid && debt.minimum_payment > 0 && <span>Pago mín: {formatCurrency(debt.minimum_payment)}/mes</span>}
+                  {!isPaid && debt.minimum_payment > 0 && (
+                    <span>Pago mín: {formatCurrency(debt.minimum_payment)}/mes</span>
+                  )}
                 </div>
+
+                {!isPaid && (
+                  paymentDebtId === debt.id ? (
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <input
+                        type="number" value={paymentAmount}
+                        onChange={e => setPaymentAmount(e.target.value)}
+                        placeholder="Monto del pago" autoFocus
+                        style={{ ...inputStyle, flex: 1 }}
+                      />
+                      <button
+                        onClick={() => handleRegisterPayment(debt)}
+                        style={{
+                          padding: '8px 14px', borderRadius: '8px', fontSize: '12px',
+                          fontWeight: 600, color: '#FFFFFF', backgroundColor: C.green,
+                          border: 'none', cursor: 'pointer',
+                        }}
+                      >
+                        Registrar
+                      </button>
+                      <button
+                        onClick={() => { setPaymentDebtId(null); setPaymentAmount('') }}
+                        style={{
+                          padding: '8px', borderRadius: '8px', fontSize: '14px',
+                          color: C.tertiary, border: `1px solid ${C.border}`,
+                          backgroundColor: 'transparent', cursor: 'pointer',
+                        }}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setPaymentDebtId(debt.id)}
+                      style={{
+                        width: '100%', padding: '8px', borderRadius: '8px',
+                        fontSize: '12px', fontWeight: 600,
+                        color: C.blue, border: `1px solid #BFDBFE`,
+                        backgroundColor: C.blueBg, cursor: 'pointer',
+                      }}
+                    >
+                      + Registrar pago
+                    </button>
+                  )
+                )}
               </div>
             )
           })}
