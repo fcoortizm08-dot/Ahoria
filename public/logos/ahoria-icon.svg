@@ -1,0 +1,14 @@
+<svg width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Left leg — green -->
+  <path d="M6 72 L36 10 L46 10 L18 72 Z" fill="#5DBB63"/>
+  <!-- Right leg — dark navy -->
+  <path d="M74 72 L46 10 L36 10 L60 72 Z" fill="#1B2E4B"/>
+  <!-- Crossbar step 1 (widest) -->
+  <rect x="21" y="51" width="28" height="7" rx="1" fill="#4A90E2"/>
+  <!-- Crossbar step 2 -->
+  <rect x="26" y="43" width="20" height="6" rx="1" fill="#4A90E2" opacity="0.75"/>
+  <!-- Arrow shaft -->
+  <rect x="56" y="36" width="10" height="26" rx="2" fill="#4A90E2"/>
+  <!-- Arrow head -->
+  <path d="M50 38 L61 18 L72 38 Z" fill="#4A90E2"/>
+</svg>

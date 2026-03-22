@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useFinanceStore } from '@/store/useFinanceStore'
+import { AhIconInline } from '@/components/ui/ah-logo'
 
 const NAV_SECTIONS = [
   {
@@ -78,34 +79,20 @@ export function Sidebar() {
         overflowY: 'auto',
       }}
     >
-      {/* Logo */}
-      <div style={{
-        padding: '20px 20px 16px',
-        borderBottom: '1px solid #E5E7EB',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <div style={{
-            width: '34px',
-            height: '34px',
-            borderRadius: '10px',
-            background: 'linear-gradient(135deg, #10B981, #059669)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: '#FFFFFF',
-            fontWeight: 800,
-            fontSize: '16px',
-            flexShrink: 0,
-          }}>A</div>
+      {/* ── LOGO ─────────────────────────────────────────────── */}
+      <div style={{ padding: '18px 20px 14px', borderBottom: '1px solid #E5E7EB' }}>
+        <Link href="/dashboard" style={{ display: 'flex', alignItems: 'center', gap: '10px', textDecoration: 'none' }}>
+          {/* Real SVG icon — inline, zero network request */}
+          <AhIconInline size={34} />
           <div>
-            <div style={{ fontSize: '15px', fontWeight: 800, color: '#111827', letterSpacing: '-0.3px' }}>
-              AHO<span style={{ color: '#10B981' }}>RIA</span>
+            <div style={{ fontSize: '15px', fontWeight: 800, color: '#1F2937', letterSpacing: '-0.2px', lineHeight: 1.2 }}>
+              AHORIA
             </div>
-            <div style={{ fontSize: '10px', color: '#9CA3AF', fontWeight: 500 }}>
+            <div style={{ fontSize: '10px', color: '#9CA3AF', fontWeight: 500, marginTop: '1px' }}>
               Finanzas inteligentes
             </div>
           </div>
-        </div>
+        </Link>
       </div>
 
       {/* Navigation */}

@@ -1,0 +1,11 @@
+<svg width="200" height="48" viewBox="0 0 200 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Icon -->
+  <path d="M3 43 L21 7 L27 7 L11 43 Z" fill="#5DBB63"/>
+  <path d="M45 43 L27 7 L21 7 L36 43 Z" fill="#1B2E4B"/>
+  <rect x="13" y="30" width="16" height="5" rx="1" fill="#4A90E2"/>
+  <rect x="16" y="25" width="11" height="4" rx="1" fill="#4A90E2" opacity="0.75"/>
+  <rect x="35" y="21" width="6" height="16" rx="1.5" fill="#4A90E2"/>
+  <path d="M31 23 L38 12 L45 23 Z" fill="#4A90E2"/>
+  <!-- Wordmark AHORIA -->
+  <text x="56" y="33" font-family="'Inter', 'Helvetica Neue', Arial, sans-serif" font-size="22" font-weight="700" letter-spacing="-0.3" fill="#1F2937">AHORIA</text>
+</svg>
