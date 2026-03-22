@@ -38,6 +38,12 @@ const NAV_SECTIONS = [
       { href: '/settings', label: 'Configuración', icon: '⚙' },
     ],
   },
+  {
+    label: 'Developer',
+    items: [
+      { href: '/design-system', label: 'Design System', icon: '◈', isDev: true },
+    ],
+  },
 ]
 
 export function Sidebar() {
@@ -121,6 +127,7 @@ export function Sidebar() {
             {section.items.map((item) => {
               const isActive = pathname === item.href
               const isAI = (item as { isAI?: boolean }).isAI
+              const isDev = (item as { isDev?: boolean }).isDev
 
               return (
                 <Link
@@ -138,13 +145,13 @@ export function Sidebar() {
                     transition: 'all 0.15s ease',
                     position: 'relative',
                     color: isActive
-                      ? (isAI ? '#7C3AED' : '#059669')
+                      ? (isAI ? '#7C3AED' : isDev ? '#6B7280' : '#059669')
                       : (isAI ? '#8B5CF6' : '#6B7280'),
                     backgroundColor: isActive
-                      ? (isAI ? '#F5F3FF' : '#ECFDF5')
+                      ? (isAI ? '#F5F3FF' : isDev ? '#F3F4F6' : '#ECFDF5')
                       : 'transparent',
                     borderLeft: isActive
-                      ? `3px solid ${isAI ? '#8B5CF6' : '#10B981'}`
+                      ? `3px solid ${isAI ? '#8B5CF6' : isDev ? '#9CA3AF' : '#10B981'}`
                       : '3px solid transparent',
                   }}
                 >
