@@ -6,44 +6,30 @@ import { formatCurrency, formatDate, calculatePercentage } from '@/lib/utils'
 import { useFinanceStore } from '@/store/useFinanceStore'
 import type { Goal } from '@/types'
 
-const C = {
-  surface: '#FFFFFF', border: '#E5E7EB',
-  blue: '#3B82F6', blueBg: '#EFF6FF',
-  green: '#10B981', greenBg: '#ECFDF5',
-  text: '#111827', muted: '#6B7280', tertiary: '#9CA3AF',
-  red: '#EF4444',
+function Skeleton({ className = '' }: { className?: string }) {
+  return <div className={`animate-pulse bg-gray-100 rounded-xl ${className}`} />
 }
 
-const inputStyle: React.CSSProperties = {
-  width: '100%', padding: '9px 12px',
-  border: `1px solid ${C.border}`, borderRadius: '8px',
-  backgroundColor: '#FFFFFF', color: C.text,
-  fontSize: '13px', outline: 'none',
-}
-
-const labelStyle: React.CSSProperties = {
-  display: 'block', fontSize: '12px', fontWeight: 600,
-  color: C.muted, marginBottom: '6px',
-}
-
-const ICONS = ['🎯','🏠','✈️','🚗','💻','📚','💊','🎓','💰','🌟','🏖️','🎸','👶','🐕','🏋️']
+const ICONS  = ['🎯','🏠','✈️','🚗','💻','📚','💊','🎓','💰','🌟','🏖️','🎸','👶','🐕','🏋️']
 const COLORS = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899','#14b8a6','#f97316','#6366f1','#84cc16']
+const EMPTY_FORM = { name: '', target_amount: '', target_date: '', icon: '🎯', color: '#3b82f6' }
 
 export default function GoalsPage() {
-  const [goals, setGoals] = useState<Goal[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [showForm, setShowForm] = useState(false)
+  const [goals, setGoals]             = useState<Goal[]>([])
+  const [isLoading, setIsLoading]     = useState(true)
+  const [showForm, setShowForm]       = useState(false)
   const [depositGoalId, setDepositGoalId] = useState<string | null>(null)
   const [depositAmount, setDepositAmount] = useState('')
-  const [form, setForm] = useState({ name: '', target_amount: '', target_date: '', icon: '🎯', color: '#3b82f6' })
-  const [saving, setSaving] = useState(false)
+  const [form, setForm]               = useState(EMPTY_FORM)
+  const [saving, setSaving]           = useState(false)
   const { addToast } = useFinanceStore()
 
   const fetchGoals = useCallback(async () => {
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
-    const { data } = await supabase.from('goals').select('*').eq('user_id', user.id).order('status').order('created_at', { ascending: false })
+    const { data } = await supabase.from('goals').select('*').eq('user_id', user.id)
+      .order('status').order('created_at', { ascending: false })
     setGoals(data ?? [])
     setIsLoading(false)
   }, [])
@@ -54,6 +40,7 @@ export default function GoalsPage() {
   const completedGoals = goals.filter(g => g.status === 'completed')
   const totalSaved     = activeGoals.reduce((s, g) => s + g.current_amount, 0)
   const totalTarget    = activeGoals.reduce((s, g) => s + g.target_amount, 0)
+  const overallPct     = totalTarget > 0 ? Math.round((totalSaved / totalTarget) * 100) : 0
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -66,10 +53,10 @@ export default function GoalsPage() {
       target_amount: Number(form.target_amount), current_amount: 0,
       target_date: form.target_date, icon: form.icon, color: form.color, status: 'active',
     })
-    if (error) { addToast('Error al crear la meta', 'error') }
+    if (error) addToast('Error al crear la meta', 'error')
     else {
-      addToast('Meta creada correctamente')
-      setForm({ name: '', target_amount: '', target_date: '', icon: '🎯', color: '#3b82f6' })
+      addToast('Meta creada ✓')
+      setForm(EMPTY_FORM)
       setShowForm(false)
       fetchGoals()
     }
@@ -85,7 +72,7 @@ export default function GoalsPage() {
       current_amount: newAmount, status: newStatus, updated_at: new Date().toISOString(),
     }).eq('id', goal.id)
     if (!error) {
-      addToast(newStatus === 'completed' ? `¡Meta "${goal.name}" completada! 🎉` : `Depósito de ${formatCurrency(Number(depositAmount))} registrado`)
+      addToast(newStatus === 'completed' ? `¡Meta "${goal.name}" completada! 🎉` : `Depósito de ${formatCurrency(Number(depositAmount))} registrado ✓`)
       setDepositAmount('')
       setDepositGoalId(null)
       fetchGoals()
@@ -100,325 +87,272 @@ export default function GoalsPage() {
   }
 
   return (
-    <div style={{ padding: '32px 40px', maxWidth: '1200px', margin: '0 auto' }}>
+    <div className="p-10 max-w-7xl mx-auto">
 
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '24px' }}>
+      {/* ── HEADER ─────────────────────────────────────────────── */}
+      <div className="flex items-start justify-between mb-8">
         <div>
-          <h1 style={{ fontSize: '22px', fontWeight: 800, color: C.text, margin: 0 }}>Metas de ahorro</h1>
-          <p style={{ fontSize: '13px', color: C.muted, marginTop: '4px' }}>
+          <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight">Metas de ahorro</h1>
+          <p className="text-sm text-gray-500 mt-1">
             {activeGoals.length} meta{activeGoals.length !== 1 ? 's' : ''} activa{activeGoals.length !== 1 ? 's' : ''}
-            {totalTarget > 0 && (
-              <> · Ahorrado: <span style={{ color: C.blue, fontWeight: 700 }}>{formatCurrency(totalSaved)}</span> de {formatCurrency(totalTarget)}</>
-            )}
+            {totalTarget > 0 && ` · ${overallPct}% del total`}
           </p>
         </div>
         <button
-          onClick={() => setShowForm(!showForm)}
-          style={{
-            backgroundColor: C.blue, color: '#FFFFFF',
-            padding: '8px 16px', borderRadius: '8px',
-            fontSize: '13px', fontWeight: 600, border: 'none',
-            cursor: 'pointer', boxShadow: '0 2px 4px rgba(59,130,246,0.25)',
-          }}
+          onClick={() => setShowForm(v => !v)}
+          className="inline-flex items-center gap-2 text-sm font-semibold text-white px-4 py-2 rounded-lg transition-opacity hover:opacity-90"
+          style={{ background: 'linear-gradient(135deg, #3B82F6, #2563EB)', boxShadow: '0 2px 8px rgba(59,130,246,0.3)' }}
         >
           + Nueva meta
         </button>
       </div>
 
-      {/* KPI row */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '24px' }}>
-        {[
-          { label: 'Total ahorrado', value: formatCurrency(totalSaved), color: C.blue },
-          { label: 'Metas activas', value: `${activeGoals.length}`, color: C.text },
-          { label: 'Metas completadas', value: `${completedGoals.length}`, color: C.green },
-        ].map(kpi => (
-          <div key={kpi.label} style={{
-            backgroundColor: C.surface, border: `1px solid ${C.border}`,
-            borderRadius: '12px', padding: '20px 24px',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-          }}>
-            <div style={{ fontSize: '11px', fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>
-              {kpi.label}
-            </div>
-            <div style={{ fontSize: '22px', fontWeight: 800, color: kpi.color }}>{kpi.value}</div>
-          </div>
-        ))}
+      {/* ── KPI ROW ────────────────────────────────────────────── */}
+      <div className="grid grid-cols-3 gap-4 mb-6">
+        <div className="bg-white rounded-xl border border-gray-200 p-5"
+          style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+          <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Total ahorrado</p>
+          <p className="text-2xl font-extrabold tracking-tight text-blue-500 mb-1">{formatCurrency(totalSaved)}</p>
+          <p className="text-xs text-gray-400">de {formatCurrency(totalTarget)} objetivo</p>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-200 p-5"
+          style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+          <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Metas activas</p>
+          <p className="text-2xl font-extrabold tracking-tight text-gray-900 mb-1">{activeGoals.length}</p>
+          <p className="text-xs text-gray-400">en progreso</p>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-200 p-5"
+          style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+          <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Metas completadas</p>
+          <p className="text-2xl font-extrabold tracking-tight text-emerald-600 mb-1">{completedGoals.length}</p>
+          <p className="text-xs text-gray-400">{completedGoals.length > 0 ? '¡Buen trabajo! 🎉' : 'Aún ninguna'}</p>
+        </div>
       </div>
 
-      {/* Add form */}
+      {/* ── ADD FORM ───────────────────────────────────────────── */}
       {showForm && (
-        <div style={{
-          backgroundColor: C.surface, border: `1px solid ${C.border}`,
-          borderRadius: '12px', padding: '24px',
-          boxShadow: '0 4px 16px rgba(0,0,0,0.08)',
-          marginBottom: '24px',
-        }}>
-          <h2 style={{ fontSize: '15px', fontWeight: 700, color: C.text, marginTop: 0, marginBottom: '20px' }}>
-            Nueva meta de ahorro
-          </h2>
+        <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6"
+          style={{ boxShadow: '0 4px 16px rgba(0,0,0,0.06)' }}>
+          <div className="flex items-center justify-between mb-5">
+            <div>
+              <h2 className="text-base font-bold text-gray-900">Nueva meta de ahorro</h2>
+              <p className="text-xs text-gray-400 mt-0.5">Define tu objetivo y empieza a ahorrar</p>
+            </div>
+            <button onClick={() => setShowForm(false)}
+              className="text-gray-400 hover:text-gray-600 transition-colors text-xl leading-none">×</button>
+          </div>
           <form onSubmit={handleSubmit}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
-              <div style={{ gridColumn: '1 / -1' }}>
-                <label style={labelStyle}>Nombre de la meta *</label>
+            <div className="grid grid-cols-2 gap-4 mb-5">
+              <div className="col-span-2">
+                <label className="block text-xs font-semibold text-gray-500 mb-1.5">Nombre de la meta *</label>
                 <input
                   value={form.name}
                   onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                  required placeholder="Ej: Fondo de emergencia"
-                  style={inputStyle}
+                  required placeholder="Ej: Fondo de emergencia, Viaje a Europa..." autoFocus
+                  className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-lg bg-white text-gray-900 focus:outline-none focus:border-blue-400 transition-colors"
                 />
               </div>
               <div>
-                <label style={labelStyle}>Monto objetivo (CLP) *</label>
+                <label className="block text-xs font-semibold text-gray-500 mb-1.5">Monto objetivo (CLP) *</label>
                 <input
                   type="number" value={form.target_amount}
                   onChange={e => setForm(f => ({ ...f, target_amount: e.target.value }))}
-                  required min="1" placeholder="2000000"
-                  style={inputStyle}
+                  required min="1" placeholder="2.000.000"
+                  className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-lg bg-white text-gray-900 focus:outline-none focus:border-blue-400 transition-colors"
                 />
               </div>
               <div>
-                <label style={labelStyle}>Fecha objetivo *</label>
+                <label className="block text-xs font-semibold text-gray-500 mb-1.5">Fecha objetivo *</label>
                 <input
                   type="date" value={form.target_date}
                   onChange={e => setForm(f => ({ ...f, target_date: e.target.value }))}
-                  required style={inputStyle}
+                  required
+                  className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-lg bg-white text-gray-900 focus:outline-none focus:border-blue-400 transition-colors"
                 />
               </div>
               <div>
-                <label style={labelStyle}>Ícono</label>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                <label className="block text-xs font-semibold text-gray-500 mb-1.5">Ícono</label>
+                <div className="flex flex-wrap gap-1.5">
                   {ICONS.map(icon => (
-                    <button
-                      key={icon} type="button"
+                    <button key={icon} type="button"
                       onClick={() => setForm(f => ({ ...f, icon }))}
+                      className="text-lg p-1.5 rounded-lg transition-all"
                       style={{
-                        fontSize: '18px', padding: '6px', borderRadius: '8px',
-                        border: `2px solid ${form.icon === icon ? C.blue : 'transparent'}`,
-                        backgroundColor: form.icon === icon ? C.blueBg : 'transparent',
-                        cursor: 'pointer',
-                      }}
-                    >
+                        border: `2px solid ${form.icon === icon ? '#3B82F6' : 'transparent'}`,
+                        backgroundColor: form.icon === icon ? '#EFF6FF' : 'transparent',
+                      }}>
                       {icon}
                     </button>
                   ))}
                 </div>
               </div>
               <div>
-                <label style={labelStyle}>Color</label>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                <label className="block text-xs font-semibold text-gray-500 mb-1.5">Color</label>
+                <div className="flex flex-wrap gap-2">
                   {COLORS.map(color => (
-                    <button
-                      key={color} type="button"
+                    <button key={color} type="button"
                       onClick={() => setForm(f => ({ ...f, color }))}
+                      className="w-7 h-7 rounded-full border-2 transition-transform"
                       style={{
-                        width: '28px', height: '28px', borderRadius: '999px',
-                        backgroundColor: color, border: 'none', cursor: 'pointer',
-                        outline: form.color === color ? `3px solid ${color}` : 'none',
-                        outlineOffset: '2px',
-                        transform: form.color === color ? 'scale(1.1)' : 'scale(1)',
+                        backgroundColor: color,
+                        borderColor: form.color === color ? color : 'transparent',
+                        outline: form.color === color ? `2px solid ${color}` : 'none',
+                        outlineOffset: 2,
+                        transform: form.color === color ? 'scale(1.15)' : 'scale(1)',
                       }}
                     />
                   ))}
                 </div>
               </div>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-              <button
-                type="button" onClick={() => setShowForm(false)}
-                style={{
-                  padding: '8px 16px', borderRadius: '8px', fontSize: '13px',
-                  fontWeight: 500, color: C.muted, border: `1px solid ${C.border}`,
-                  backgroundColor: 'transparent', cursor: 'pointer',
-                }}
-              >
+            <div className="flex justify-end gap-3">
+              <button type="button" onClick={() => setShowForm(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
                 Cancelar
               </button>
-              <button
-                type="submit" disabled={saving}
-                style={{
-                  padding: '8px 20px', borderRadius: '8px', fontSize: '13px',
-                  fontWeight: 600, color: '#FFFFFF', backgroundColor: C.blue,
-                  border: 'none', cursor: 'pointer', opacity: saving ? 0.6 : 1,
-                }}
-              >
-                {saving ? 'Guardando...' : 'Crear meta'}
+              <button type="submit" disabled={saving}
+                className="px-5 py-2 text-sm font-semibold text-white rounded-lg transition-opacity disabled:opacity-60"
+                style={{ background: 'linear-gradient(135deg, #3B82F6, #2563EB)' }}>
+                {saving ? 'Creando...' : 'Crear meta'}
               </button>
             </div>
           </form>
         </div>
       )}
 
-      {/* Goals grid */}
+      {/* ── GOALS GRID ─────────────────────────────────────────── */}
       {isLoading ? (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
-          {[1,2].map(i => (
-            <div key={i} style={{ height: '180px', backgroundColor: C.surface, borderRadius: '12px', border: `1px solid ${C.border}` }} />
-          ))}
+        <div className="grid grid-cols-2 gap-5">
+          {[1,2,3,4].map(i => <Skeleton key={i} className="h-56" />)}
         </div>
       ) : goals.length === 0 ? (
-        <div style={{
-          backgroundColor: C.surface, border: `1px solid ${C.border}`,
-          borderRadius: '12px', padding: '60px', textAlign: 'center',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-        }}>
-          <p style={{ fontSize: '48px', marginBottom: '12px' }}>🎯</p>
-          <p style={{ fontSize: '16px', fontWeight: 700, color: C.text, marginBottom: '8px' }}>
-            Define tu primer objetivo
-          </p>
-          <p style={{ fontSize: '13px', color: C.muted, marginBottom: '20px', maxWidth: '320px', margin: '0 auto 20px' }}>
+        <div className="bg-white rounded-2xl border border-gray-200 py-20 text-center"
+          style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
+          <p className="text-5xl mb-4">🎯</p>
+          <p className="text-base font-bold text-gray-700 mb-1">Define tu primer objetivo</p>
+          <p className="text-sm text-gray-400 mb-6 max-w-sm mx-auto">
             Del sueño al plan concreto. Crea una meta, deposita ahorros y ve tu progreso crecer.
           </p>
-          <button
-            onClick={() => setShowForm(true)}
-            style={{
-              backgroundColor: C.blue, color: '#FFFFFF',
-              padding: '10px 24px', borderRadius: '8px',
-              fontSize: '13px', fontWeight: 600, border: 'none', cursor: 'pointer',
-            }}
-          >
+          <button onClick={() => setShowForm(true)}
+            className="inline-flex items-center gap-2 text-sm font-semibold text-white px-5 py-2.5 rounded-lg"
+            style={{ background: 'linear-gradient(135deg, #3B82F6, #2563EB)' }}>
             + Crear primera meta
           </button>
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
+        <div className="grid grid-cols-2 gap-5">
           {goals.map(goal => {
-            const progress  = calculatePercentage(goal.current_amount, goal.target_amount)
+            const progress    = calculatePercentage(goal.current_amount, goal.target_amount)
             const isCompleted = goal.status === 'completed'
-            const daysLeft  = goal.target_date
+            const daysLeft    = goal.target_date
               ? Math.ceil((new Date(goal.target_date + 'T00:00:00').getTime() - Date.now()) / 86400000)
               : null
+            const isDepositing = depositGoalId === goal.id
 
             return (
-              <div
-                key={goal.id}
+              <div key={goal.id}
+                className="bg-white rounded-2xl border p-6 relative transition-shadow hover:shadow-md"
                 style={{
-                  backgroundColor: C.surface,
-                  border: `1px solid ${isCompleted ? '#A7F3D0' : C.border}`,
-                  borderRadius: '12px', padding: '24px',
+                  borderColor: isCompleted ? '#A7F3D0' : '#E5E7EB',
                   boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-                  position: 'relative',
-                }}
-              >
+                }}>
+
+                {/* Completed badge */}
                 {isCompleted && (
-                  <div style={{
-                    position: 'absolute', top: '12px', right: '12px',
-                    backgroundColor: C.greenBg, color: C.green,
-                    fontSize: '10px', fontWeight: 700,
-                    padding: '2px 8px', borderRadius: '999px',
-                    border: '1px solid #A7F3D0',
-                  }}>
-                    Completada ✓
-                  </div>
+                  <span className="absolute top-4 right-4 text-xs font-bold px-2.5 py-1 rounded-full"
+                    style={{ backgroundColor: '#ECFDF5', color: '#10B981', border: '1px solid #A7F3D0' }}>
+                    ✓ Completada
+                  </span>
                 )}
 
-                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '16px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <div style={{
-                      width: '48px', height: '48px', borderRadius: '12px',
-                      backgroundColor: goal.color + '18',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: '24px', flexShrink: 0,
-                    }}>
-                      {goal.icon}
-                    </div>
-                    <div>
-                      <div style={{ fontSize: '15px', fontWeight: 700, color: C.text }}>{goal.name}</div>
-                      {!isCompleted && (
-                        <div style={{ fontSize: '11px', color: C.tertiary, marginTop: '2px' }}>
-                          {formatDate(goal.target_date)}
-                          {daysLeft !== null && daysLeft > 0 && (
-                            <span style={{ color: daysLeft <= 30 ? '#F59E0B' : C.tertiary }}>
-                              {' '}· {daysLeft} días
-                            </span>
-                          )}
-                        </div>
-                      )}
-                    </div>
+                {/* Header */}
+                <div className="flex items-start gap-4 mb-5">
+                  <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-2xl shrink-0"
+                    style={{ backgroundColor: goal.color + '18' }}>
+                    {goal.icon}
                   </div>
-                  <button
-                    onClick={() => handleDelete(goal.id)}
-                    style={{
-                      background: 'none', border: 'none', cursor: 'pointer',
-                      fontSize: '14px', color: C.tertiary, padding: '4px',
-                    }}
-                    onMouseEnter={e => (e.currentTarget.style.color = C.red)}
-                    onMouseLeave={e => (e.currentTarget.style.color = C.tertiary)}
-                  >
-                    ✕
-                  </button>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-base font-bold text-gray-900 truncate pr-16">{goal.name}</h3>
+                    {!isCompleted && (
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        {formatDate(goal.target_date)}
+                        {daysLeft !== null && daysLeft > 0 && (
+                          <span style={{ color: daysLeft <= 30 ? '#F59E0B' : '#9CA3AF' }}>
+                            {' '}· {daysLeft} días restantes
+                          </span>
+                        )}
+                        {daysLeft !== null && daysLeft <= 0 && (
+                          <span className="text-red-400"> · ¡Vencida!</span>
+                        )}
+                      </p>
+                    )}
+                  </div>
+                  {!isCompleted && (
+                    <button onClick={() => handleDelete(goal.id)}
+                      className="absolute top-4 right-4 text-gray-300 hover:text-red-400 transition-colors text-sm p-1.5 rounded-lg hover:bg-red-50">
+                      ✕
+                    </button>
+                  )}
                 </div>
 
                 {/* Amounts */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                <div className="flex items-end justify-between mb-3">
                   <div>
-                    <div style={{ fontSize: '11px', color: C.tertiary }}>Ahorrado</div>
-                    <div style={{ fontSize: '16px', fontWeight: 800, color: C.text }}>
+                    <p className="text-xs text-gray-400 mb-0.5">Ahorrado</p>
+                    <p className="text-xl font-extrabold tracking-tight text-gray-900">
                       {formatCurrency(goal.current_amount)}
-                    </div>
+                    </p>
                   </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: '11px', color: C.tertiary }}>Meta</div>
-                    <div style={{ fontSize: '16px', fontWeight: 800, color: C.muted }}>
-                      {formatCurrency(goal.target_amount)}
-                    </div>
+                  <div className="text-right">
+                    <p className="text-xs text-gray-400 mb-0.5">Meta</p>
+                    <p className="text-base font-bold text-gray-400">{formatCurrency(goal.target_amount)}</p>
                   </div>
                 </div>
 
                 {/* Progress bar */}
-                <div style={{ height: '8px', backgroundColor: '#E5E7EB', borderRadius: '999px', marginBottom: '6px' }}>
-                  <div style={{
-                    height: '8px', borderRadius: '999px',
-                    backgroundColor: isCompleted ? C.green : goal.color,
-                    width: `${Math.min(progress, 100)}%`,
-                    transition: 'width 0.5s ease',
-                  }} />
+                <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden mb-2">
+                  <div className="h-full rounded-full transition-all duration-700"
+                    style={{
+                      width: `${Math.min(progress, 100)}%`,
+                      backgroundColor: isCompleted ? '#10B981' : goal.color,
+                    }} />
                 </div>
-                <div style={{ fontSize: '11px', color: C.tertiary, marginBottom: '16px' }}>
-                  {progress}% · Faltan {formatCurrency(Math.max(goal.target_amount - goal.current_amount, 0))}
-                </div>
+                <p className="text-xs text-gray-400 mb-4">
+                  <span className="font-semibold" style={{ color: goal.color }}>{progress}%</span>
+                  {' '}completado · Faltan{' '}
+                  <span className="font-medium text-gray-600">{formatCurrency(Math.max(goal.target_amount - goal.current_amount, 0))}</span>
+                </p>
 
-                {/* Deposit */}
+                {/* Deposit action */}
                 {!isCompleted && (
-                  depositGoalId === goal.id ? (
-                    <div style={{ display: 'flex', gap: '8px' }}>
+                  isDepositing ? (
+                    <div className="flex gap-2">
                       <input
                         type="number" value={depositAmount}
                         onChange={e => setDepositAmount(e.target.value)}
-                        placeholder="Monto a depositar (CLP)" autoFocus
-                        style={{ ...inputStyle, flex: 1 }}
+                        placeholder="Monto a depositar" autoFocus
+                        className="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white text-gray-900 focus:outline-none focus:border-blue-400 transition-colors"
                       />
-                      <button
-                        onClick={() => handleDeposit(goal)}
-                        style={{
-                          padding: '8px 14px', borderRadius: '8px', fontSize: '12px',
-                          fontWeight: 600, color: '#FFFFFF', backgroundColor: goal.color,
-                          border: 'none', cursor: 'pointer', flexShrink: 0,
-                        }}
-                      >
+                      <button onClick={() => handleDeposit(goal)}
+                        className="px-3 py-2 text-sm font-semibold text-white rounded-lg shrink-0"
+                        style={{ backgroundColor: goal.color }}>
                         Depositar
                       </button>
-                      <button
-                        onClick={() => { setDepositGoalId(null); setDepositAmount('') }}
-                        style={{
-                          padding: '8px', borderRadius: '8px', fontSize: '14px',
-                          color: C.tertiary, border: `1px solid ${C.border}`,
-                          backgroundColor: 'transparent', cursor: 'pointer',
-                        }}
-                      >
+                      <button onClick={() => { setDepositGoalId(null); setDepositAmount('') }}
+                        className="px-2 py-2 text-sm text-gray-400 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
                         ✕
                       </button>
                     </div>
                   ) : (
-                    <button
-                      onClick={() => setDepositGoalId(goal.id)}
+                    <button onClick={() => setDepositGoalId(goal.id)}
+                      className="w-full py-2.5 text-sm font-semibold rounded-xl transition-colors"
                       style={{
-                        width: '100%', padding: '8px', borderRadius: '8px',
-                        fontSize: '12px', fontWeight: 600,
-                        color: goal.color, border: `1px solid ${goal.color}30`,
+                        color: goal.color,
+                        border: `1.5px solid ${goal.color}40`,
                         backgroundColor: goal.color + '08',
-                        cursor: 'pointer',
                       }}
+                      onMouseEnter={e => (e.currentTarget.style.backgroundColor = goal.color + '14')}
+                      onMouseLeave={e => (e.currentTarget.style.backgroundColor = goal.color + '08')}
                     >
                       + Depositar ahorro
                     </button>
