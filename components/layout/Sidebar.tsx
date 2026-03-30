@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { useEntitlements } from '@/hooks/useEntitlements'
 import { cn } from '@/lib/utils'
 import type { Profile } from '@/types'
 
@@ -17,6 +18,9 @@ const NAV_ITEMS = [
 export function Sidebar({ profile }: { profile: Profile | null }) {
   const pathname = usePathname()
   const router = useRouter()
+  const { isPro, isLoading: entitlementsLoading } = useEntitlements()
+
+  const showUpgrade = !entitlementsLoading && !isPro
 
   const handleLogout = async () => {
     const supabase = createClient()
@@ -93,6 +97,21 @@ export function Sidebar({ profile }: { profile: Profile | null }) {
       </div>
 
       <div className="mt-auto pt-3 border-t border-[#1e2d45]">
+        {showUpgrade && (
+          <Link
+            href="/upgrade"
+            className={cn(
+              'flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-xs font-semibold mb-2 transition-all border',
+              pathname === '/upgrade'
+                ? 'bg-violet-500/15 text-violet-300 border-violet-500/30'
+                : 'text-violet-400 border-violet-500/20 bg-violet-500/5 hover:bg-violet-500/15 hover:text-violet-300',
+            )}
+          >
+            <span className="text-sm w-4 text-center">★</span>
+            Mejorar a Pro
+          </Link>
+        )}
+
         <button
           onClick={handleLogout}
           className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-xs font-medium text-slate-500 hover:bg-[#111827] hover:text-slate-300 transition-all"

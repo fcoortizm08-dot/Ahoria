@@ -1,0 +1,281 @@
+// FinTrack Pro / AHORIA — Prisma Schema
+// Prisma 7  ·  provider prisma-client  ·  Supabase PostgreSQL 17
+
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TABLAS EXISTENTES (mapeadas desde Supabase)
+// user_id → auth.users.id  (sin relación Prisma: auth schema externo)
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Profile {
+  id                String    @id @db.Uuid
+  fullName          String?   @map("full_name")
+  currency          String    @default("CLP")
+  monthlyIncomeGoal BigInt?   @default(0) @map("monthly_income_goal")
+  savingsGoalPct    Int?      @default(30) @map("savings_goal_pct")
+  createdAt         DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime? @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  // Billing relations
+  subscriptions      Subscription[]
+  userActivation     UserActivation?
+  usageCounters      UsageCounter[]
+  paywallImpressions PaywallImpression[]
+  notificationLogs   NotificationLog[]
+  auditLogs          AuditLog[]
+
+  @@map("profiles")
+}
+
+model Category {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String?   @map("user_id") @db.Uuid
+  name      String
+  type      String
+  icon      String?   @default("📦")
+  color     String?   @default("#6b7280")
+  isSystem  Boolean?  @default(false) @map("is_system")
+  createdAt DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  transactions Transaction[]
+
+  @@map("categories")
+}
+
+model Transaction {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId       String    @map("user_id") @db.Uuid
+  categoryId   String?   @map("category_id") @db.Uuid
+  type         String
+  amount       BigInt
+  description  String
+  date         DateTime  @default(dbgenerated("CURRENT_DATE")) @db.Date
+  isRecurring  Boolean?  @default(false) @map("is_recurring")
+  recurringDay Int?      @map("recurring_day")
+  notes        String?
+  deletedAt    DateTime? @map("deleted_at") @db.Timestamptz(6)
+  createdAt    DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime? @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  category Category? @relation(fields: [categoryId], references: [id])
+
+  @@map("transactions")
+}
+
+model Debt {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId         String    @map("user_id") @db.Uuid
+  name           String
+  totalAmount    BigInt    @map("total_amount")
+  currentBalance BigInt    @default(0) @map("current_balance")
+  interestRate   Decimal?  @default(0) @map("interest_rate") @db.Decimal
+  minimumPayment BigInt?   @default(0) @map("minimum_payment")
+  dueDay         Int?      @map("due_day")
+  status         String    @default("active")
+  createdAt      DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime? @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@map("debts")
+}
+
+model Goal {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId        String    @map("user_id") @db.Uuid
+  name          String
+  targetAmount  BigInt    @map("target_amount")
+  currentAmount BigInt    @default(0) @map("current_amount")
+  targetDate    DateTime  @map("target_date") @db.Date
+  icon          String?   @default("🎯")
+  color         String?   @default("#8b5cf6")
+  status        String    @default("active")
+  createdAt     DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime? @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@map("goals")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BILLING — AHORIA
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Plan {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  slug         String   @unique
+  name         String
+  priceClp     BigInt   @default(0) @map("price_clp")
+  priceUsd     Decimal  @default(0) @map("price_usd") @db.Decimal(10, 2)
+  billingCycle String   @default("monthly") @map("billing_cycle")
+  trialDays    Int      @default(0) @map("trial_days")
+  isActive     Boolean  @default(true) @map("is_active")
+  metadata     Json?    @db.Json
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  features      PlanFeature[]
+  subscriptions Subscription[]
+  trialOffers   TrialOffer[]
+
+  @@map("plans")
+}
+
+model PlanFeature {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  planId     String   @map("plan_id") @db.Uuid
+  featureKey String   @map("feature_key")
+  value      String
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  plan Plan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@unique([planId, featureKey])
+  @@map("plan_features")
+}
+
+model Subscription {
+  id                 String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId             String    @map("user_id") @db.Uuid
+  planId             String    @map("plan_id") @db.Uuid
+  status             String    @default("active")
+  currentPeriodStart DateTime  @map("current_period_start") @db.Timestamptz(6)
+  currentPeriodEnd   DateTime  @map("current_period_end") @db.Timestamptz(6)
+  trialStart         DateTime? @map("trial_start") @db.Timestamptz(6)
+  trialEnd           DateTime? @map("trial_end") @db.Timestamptz(6)
+  canceledAt         DateTime? @map("canceled_at") @db.Timestamptz(6)
+  cancelReason       String?   @map("cancel_reason")
+  mpSubscriptionId   String?   @unique @map("mp_subscription_id")
+  mpPreapprovalId    String?   @map("mp_preapproval_id")
+  metadata           Json?     @db.Json
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  profile Profile             @relation(fields: [userId], references: [id])
+  plan    Plan                @relation(fields: [planId], references: [id])
+  events  SubscriptionEvent[]
+
+  @@map("subscriptions")
+}
+
+model SubscriptionEvent {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  subscriptionId String   @map("subscription_id") @db.Uuid
+  eventType      String   @map("event_type")
+  payload        Json?    @db.Json
+  processedAt    DateTime @default(now()) @map("processed_at") @db.Timestamptz(6)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@map("subscription_events")
+}
+
+model UserActivation {
+  id                     String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId                 String    @unique @map("user_id") @db.Uuid
+  registeredAt           DateTime  @default(now()) @map("registered_at") @db.Timestamptz(6)
+  onboardingCompleted    Boolean   @default(false) @map("onboarding_completed")
+  onboardingCompletedAt  DateTime? @map("onboarding_completed_at") @db.Timestamptz(6)
+  firstTransactionAt     DateTime? @map("first_transaction_at") @db.Timestamptz(6)
+  firstGoalAt            DateTime? @map("first_goal_at") @db.Timestamptz(6)
+  firstDebtAt            DateTime? @map("first_debt_at") @db.Timestamptz(6)
+  activationScore        Int       @default(0) @map("activation_score")
+  referralSource         String?   @map("referral_source")
+  utmSource              String?   @map("utm_source")
+  utmMedium              String?   @map("utm_medium")
+  utmCampaign            String?   @map("utm_campaign")
+  createdAt              DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  profile Profile @relation(fields: [userId], references: [id])
+
+  @@map("user_activations")
+}
+
+model UsageCounter {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  counterKey  String    @map("counter_key")
+  value       BigInt    @default(0)
+  periodStart DateTime  @map("period_start") @db.Date
+  periodEnd   DateTime  @map("period_end") @db.Date
+  resetAt     DateTime? @map("reset_at") @db.Timestamptz(6)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  profile Profile @relation(fields: [userId], references: [id])
+
+  @@unique([userId, counterKey, periodStart])
+  @@map("usage_counters")
+}
+
+model TrialOffer {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  planId     String    @map("plan_id") @db.Uuid
+  code       String    @unique
+  trialDays  Int       @map("trial_days")
+  maxUses    Int?      @map("max_uses")
+  usedCount  Int       @default(0) @map("used_count")
+  expiresAt  DateTime? @map("expires_at") @db.Timestamptz(6)
+  isActive   Boolean   @default(true) @map("is_active")
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  plan Plan @relation(fields: [planId], references: [id])
+
+  @@map("trial_offers")
+}
+
+model PaywallImpression {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  feature     String
+  planShown   String    @map("plan_shown")
+  converted   Boolean   @default(false)
+  convertedAt DateTime? @map("converted_at") @db.Timestamptz(6)
+  sessionId   String?   @map("session_id")
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  profile Profile @relation(fields: [userId], references: [id])
+
+  @@map("paywall_impressions")
+}
+
+model NotificationLog {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  channel   String
+  type      String
+  subject   String?
+  status    String    @default("pending")
+  sentAt    DateTime? @map("sent_at") @db.Timestamptz(6)
+  error     String?
+  metadata  Json?     @db.Json
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  profile Profile @relation(fields: [userId], references: [id])
+
+  @@map("notification_logs")
+}
+
+model AuditLog {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId     String?   @map("user_id") @db.Uuid
+  action     String
+  entityType String    @map("entity_type")
+  entityId   String?   @map("entity_id") @db.Uuid
+  before     Json?     @db.Json
+  after      Json?     @db.Json
+  ipAddress  String?   @map("ip_address")
+  userAgent  String?   @map("user_agent")
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  profile Profile? @relation(fields: [userId], references: [id])
+
+  @@map("audit_logs")
+}
