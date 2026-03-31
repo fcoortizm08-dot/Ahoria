@@ -8,10 +8,10 @@ export default function AuthLayout({
       <div className="hidden lg:flex lg:w-1/2 bg-[#0d1117] border-r border-[#1e2d45] flex-col justify-between p-12">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-sm">
-            F
+            A
           </div>
           <span className="text-white font-bold text-base">
-            Fin<span className="text-blue-400">Track</span> Pro
+            Ahoria
           </span>
         </div>
         <div>
@@ -33,7 +33,7 @@ export default function AuthLayout({
             ))}
           </div>
         </div>
-        <p className="text-xs text-slate-600">© 2025 FinTrack Pro.</p>
+        <p className="text-xs text-slate-600">© 2025 Ahoria.</p>
       </div>
       <div className="flex-1 flex items-center justify-center p-6">
         {children}

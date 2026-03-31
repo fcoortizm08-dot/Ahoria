@@ -17,7 +17,7 @@ export default async function DashboardPage({ searchParams }: Props) {
         </Suspense>
       )}
       <h1 className="text-xl font-extrabold text-white">Dashboard</h1>
-      <p className="text-slate-400">Bienvenido a FinTrack Pro</p>
+      <p className="text-slate-400">Bienvenido a Ahoria</p>
     </div>
   )
 }

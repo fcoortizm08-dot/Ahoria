@@ -41,10 +41,10 @@ export function Sidebar({ profile }: { profile: Profile | null }) {
 
       <div className="flex items-center gap-2.5 px-2 pb-4 mb-2 border-b border-[#1e2d45]">
         <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-xs flex-shrink-0">
-          F
+          A
         </div>
         <span className="text-sm font-bold text-white">
-          Fin<span className="text-blue-400">Track</span> Pro
+          Ahoria
         </span>
       </div>
 
