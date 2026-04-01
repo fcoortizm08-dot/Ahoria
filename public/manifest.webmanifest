@@ -1,0 +1,23 @@
+{
+  "name": "AHORIA — Finanzas personales inteligentes",
+  "short_name": "AHORIA",
+  "description": "Entiende tu situación financiera en menos de 1 minuto.",
+  "start_url": "/dashboard",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#F7F9F7",
+  "theme_color": "#5DBB63",
+  "orientation": "portrait-primary",
+  "lang": "es-CL",
+  "icons": [
+    { "src": "/logos/ahoria-icon-square.svg", "sizes": "any",     "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/logos/ahoria-icon-square.svg", "sizes": "any",     "type": "image/svg+xml", "purpose": "maskable" },
+    { "src": "/logos/ahoria-icon.svg",        "sizes": "512x512", "type": "image/svg+xml" }
+  ],
+  "categories": ["finance", "productivity"],
+  "shortcuts": [
+    { "name": "Dashboard",  "url": "/dashboard", "description": "Ver mi estado financiero" },
+    { "name": "Ingresos",   "url": "/income",    "description": "Registrar ingreso" },
+    { "name": "Gastos",     "url": "/expenses",  "description": "Registrar gasto" }
+  ]
+}

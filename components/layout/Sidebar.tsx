@@ -3,24 +3,54 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { useEntitlements } from '@/hooks/useEntitlements'
-import { cn } from '@/lib/utils'
-import type { Profile } from '@/types'
+import { useFinanceStore } from '@/store/useFinanceStore'
+import { AhIconInline } from '@/components/ui/ah-logo'
 
-const NAV_ITEMS = [
-  { href: '/dashboard', icon: '⊞', label: 'Dashboard', group: 'principal' },
-  { href: '/income',    icon: '↑', label: 'Ingresos',  group: 'principal' },
-  { href: '/expenses',  icon: '↓', label: 'Gastos',    group: 'principal' },
-  { href: '/debts',     icon: '▤', label: 'Deudas',    group: 'gestion'   },
-  { href: '/goals',     icon: '◎', label: 'Metas',     group: 'gestion'   },
+const NAV_SECTIONS = [
+  {
+    label: null,
+    items: [
+      { href: '/dashboard', label: 'Dashboard', icon: '⊞' },
+    ],
+  },
+  {
+    label: 'Movimientos',
+    items: [
+      { href: '/income',   label: 'Ingresos', icon: '↑' },
+      { href: '/expenses', label: 'Gastos',   icon: '↓' },
+    ],
+  },
+  {
+    label: 'Planificación',
+    items: [
+      { href: '/goals', label: 'Metas',  icon: '◎' },
+      { href: '/debts', label: 'Deudas', icon: '◫' },
+    ],
+  },
+  {
+    label: 'Inteligencia',
+    items: [
+      { href: '/ai', label: 'Asistente IA', icon: '✦', isAI: true },
+    ],
+  },
+  {
+    label: 'Cuenta',
+    items: [
+      { href: '/settings', label: 'Configuración', icon: '⚙' },
+    ],
+  },
+  {
+    label: 'Developer',
+    items: [
+      { href: '/design-system', label: 'Design System', icon: '◈', isDev: true },
+    ],
+  },
 ]
 
-export function Sidebar({ profile }: { profile: Profile | null }) {
+export function Sidebar() {
   const pathname = usePathname()
-  const router = useRouter()
-  const { isPro, isLoading: entitlementsLoading } = useEntitlements()
-
-  const showUpgrade = !entitlementsLoading && !isPro
+  const router   = useRouter()
+  const profile  = useFinanceStore(s => s.profile)
 
   const handleLogout = async () => {
     const supabase = createClient()
@@ -30,103 +60,187 @@ export function Sidebar({ profile }: { profile: Profile | null }) {
   }
 
   const initials = profile?.full_name
-    ?.split(' ')
-    .map(n => n[0])
-    .slice(0, 2)
-    .join('')
-    .toUpperCase() ?? 'U'
+    ?.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase() ?? 'A'
 
   return (
-    <aside className="w-[210px] bg-[#0d1117] border-r border-[#1e2d45] flex flex-col fixed top-0 left-0 bottom-0 z-50 py-4 px-2.5 overflow-y-auto">
-
-      <div className="flex items-center gap-2.5 px-2 pb-4 mb-2 border-b border-[#1e2d45]">
-        <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-xs flex-shrink-0">
-          A
-        </div>
-        <span className="text-sm font-bold text-white">
-          Ahoria
-        </span>
+    <aside
+      style={{
+        width: '240px',
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        bottom: 0,
+        zIndex: 50,
+        backgroundColor: '#FFFFFF',
+        borderRight: '1px solid #E5E7EB',
+        display: 'flex',
+        flexDirection: 'column',
+        padding: '0',
+        overflowY: 'auto',
+      }}
+    >
+      {/* ── LOGO ─────────────────────────────────────────────── */}
+      <div style={{ padding: '18px 20px 14px', borderBottom: '1px solid #E5E7EB' }}>
+        <Link href="/dashboard" style={{ display: 'flex', alignItems: 'center', gap: '10px', textDecoration: 'none' }}>
+          {/* Real SVG icon — inline, zero network request */}
+          <AhIconInline size={34} />
+          <div>
+            <div style={{ fontSize: '15px', fontWeight: 800, color: '#1F2937', letterSpacing: '-0.2px', lineHeight: 1.2 }}>
+              AHORIA
+            </div>
+            <div style={{ fontSize: '10px', color: '#9CA3AF', fontWeight: 500, marginTop: '1px' }}>
+              Finanzas inteligentes
+            </div>
+          </div>
+        </Link>
       </div>
 
-      <div className="mb-1">
-        <p className="text-[9px] font-semibold uppercase tracking-[1.2px] text-[#2d3f58] px-2 mb-1.5">
-          Principal
-        </p>
-        {NAV_ITEMS.filter(i => i.group === 'principal').map(item => (
-          <Link
-            key={item.href}
-            href={item.href}
-            className={cn(
-              'flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-xs font-medium transition-all mb-0.5 relative border',
-              pathname === item.href
-                ? 'bg-blue-500/10 text-blue-300 border-blue-500/20'
-                : 'text-slate-500 border-transparent hover:bg-[#111827] hover:text-slate-300'
+      {/* Navigation */}
+      <nav style={{ flex: 1, padding: '12px 12px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+        {NAV_SECTIONS.map((section, si) => (
+          <div key={si} style={{ marginBottom: section.label ? '4px' : '0' }}>
+            {section.label && (
+              <div style={{
+                fontSize: '10px',
+                fontWeight: 700,
+                color: '#9CA3AF',
+                textTransform: 'uppercase',
+                letterSpacing: '0.8px',
+                padding: '8px 8px 4px',
+              }}>
+                {section.label}
+              </div>
             )}
-          >
-            {pathname === item.href && (
-              <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-4 bg-blue-500 rounded-r-full" />
-            )}
-            <span className="text-sm w-4 text-center">{item.icon}</span>
-            {item.label}
-          </Link>
+            {section.items.map((item) => {
+              const isActive = pathname === item.href
+              const isAI = (item as { isAI?: boolean }).isAI
+              const isDev = (item as { isDev?: boolean }).isDev
+
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '8px 10px',
+                    borderRadius: '8px',
+                    fontSize: '13px',
+                    fontWeight: isActive ? 600 : 500,
+                    textDecoration: 'none',
+                    transition: 'all 0.15s ease',
+                    position: 'relative',
+                    color: isActive
+                      ? (isAI ? '#7C3AED' : isDev ? '#6B7280' : '#059669')
+                      : (isAI ? '#8B5CF6' : '#6B7280'),
+                    backgroundColor: isActive
+                      ? (isAI ? '#F5F3FF' : isDev ? '#F3F4F6' : '#ECFDF5')
+                      : 'transparent',
+                    borderLeft: isActive
+                      ? `3px solid ${isAI ? '#8B5CF6' : isDev ? '#9CA3AF' : '#10B981'}`
+                      : '3px solid transparent',
+                  }}
+                >
+                  <span style={{ fontSize: '14px', width: '16px', textAlign: 'center', flexShrink: 0 }}>
+                    {item.icon}
+                  </span>
+                  <span>{item.label}</span>
+                  {isAI && !isActive && (
+                    <span style={{
+                      marginLeft: 'auto',
+                      fontSize: '9px',
+                      fontWeight: 700,
+                      padding: '1px 6px',
+                      borderRadius: '999px',
+                      backgroundColor: '#F5F3FF',
+                      color: '#8B5CF6',
+                    }}>
+                      IA
+                    </span>
+                  )}
+                </Link>
+              )
+            })}
+          </div>
         ))}
-      </div>
+      </nav>
 
-      <div>
-        <p className="text-[9px] font-semibold uppercase tracking-[1.2px] text-[#2d3f58] px-2 mb-1.5 mt-2">
-          Gestión
-        </p>
-        {NAV_ITEMS.filter(i => i.group === 'gestion').map(item => (
-          <Link
-            key={item.href}
-            href={item.href}
-            className={cn(
-              'flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-xs font-medium transition-all mb-0.5 relative border',
-              pathname === item.href
-                ? 'bg-blue-500/10 text-blue-300 border-blue-500/20'
-                : 'text-slate-500 border-transparent hover:bg-[#111827] hover:text-slate-300'
-            )}
-          >
-            {pathname === item.href && (
-              <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-4 bg-blue-500 rounded-r-full" />
-            )}
-            <span className="text-sm w-4 text-center">{item.icon}</span>
-            {item.label}
-          </Link>
-        ))}
-      </div>
-
-      <div className="mt-auto pt-3 border-t border-[#1e2d45]">
-        {showUpgrade && (
-          <Link
-            href="/upgrade"
-            className={cn(
-              'flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-xs font-semibold mb-2 transition-all border',
-              pathname === '/upgrade'
-                ? 'bg-violet-500/15 text-violet-300 border-violet-500/30'
-                : 'text-violet-400 border-violet-500/20 bg-violet-500/5 hover:bg-violet-500/15 hover:text-violet-300',
-            )}
-          >
-            <span className="text-sm w-4 text-center">★</span>
-            Mejorar a Pro
-          </Link>
-        )}
-
-        <button
-          onClick={handleLogout}
-          className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-xs font-medium text-slate-500 hover:bg-[#111827] hover:text-slate-300 transition-all"
-        >
-          <div className="w-6 h-6 rounded-full bg-gradient-to-br from-blue-500 to-violet-500 flex items-center justify-center text-[9px] font-bold text-white flex-shrink-0">
+      {/* User section */}
+      <div style={{
+        padding: '12px',
+        borderTop: '1px solid #E5E7EB',
+      }}>
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px',
+          padding: '8px 10px',
+          borderRadius: '8px',
+          marginBottom: '4px',
+        }}>
+          <div style={{
+            width: '32px',
+            height: '32px',
+            borderRadius: '999px',
+            background: 'linear-gradient(135deg, #10B981, #3B82F6)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#FFFFFF',
+            fontSize: '11px',
+            fontWeight: 700,
+            flexShrink: 0,
+          }}>
             {initials}
           </div>
-          <div className="flex-1 text-left">
-            <div className="text-white text-[11px] font-semibold truncate">
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{
+              fontSize: '12px',
+              fontWeight: 600,
+              color: '#111827',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}>
               {profile?.full_name ?? 'Usuario'}
             </div>
-            <div className="text-slate-600 text-[10px]">Cerrar sesión</div>
+            <div style={{ fontSize: '10px', color: '#9CA3AF' }}>Plan Gratis</div>
           </div>
+        </div>
+        <button
+          onClick={handleLogout}
+          style={{
+            width: '100%',
+            padding: '7px 10px',
+            borderRadius: '8px',
+            border: '1px solid #E5E7EB',
+            backgroundColor: 'transparent',
+            color: '#6B7280',
+            fontSize: '12px',
+            fontWeight: 500,
+            cursor: 'pointer',
+            transition: 'all 0.15s ease',
+            textAlign: 'center',
+          }}
+          onMouseEnter={e => {
+            const el = e.currentTarget as HTMLButtonElement
+            el.style.backgroundColor = '#FEF2F2'
+            el.style.borderColor = '#FECACA'
+            el.style.color = '#DC2626'
+          }}
+          onMouseLeave={e => {
+            const el = e.currentTarget as HTMLButtonElement
+            el.style.backgroundColor = 'transparent'
+            el.style.borderColor = '#E5E7EB'
+            el.style.color = '#6B7280'
+          }}
+        >
+          Cerrar sesión
         </button>
       </div>
     </aside>
   )
 }
+
+export default Sidebar

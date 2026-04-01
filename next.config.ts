@@ -1,5 +1,12 @@
-import type { NextConfig } from "next";
+import type { NextConfig } from 'next'
 
-const nextConfig: NextConfig = {};
+const nextConfig: NextConfig = {
+  images: {
+    // Allow SVG logos served from /public
+    dangerouslyAllowSVG: true,
+    contentDispositionType: 'attachment',
+    contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
+  },
+}
 
-export default nextConfig;
+export default nextConfig

@@ -1,340 +1,362 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
-import { formatCurrency, formatDate } from '@/lib/utils'
-import { PaywallGate } from '@/components/common/PaywallGate'
-import { FEATURE_KEYS } from '@/lib/plans'
+import { useEffect, useState, useCallback } from 'react'
+import { createClient } from '@/lib/supabase/client'
+import { formatCurrency, formatDate, calculatePercentage } from '@/lib/utils'
+import { useFinanceStore } from '@/store/useFinanceStore'
 import type { Goal } from '@/types'
 
-function Skeleton() {
-  return (
-    <div className="space-y-3">
-      {[...Array(3)].map((_, i) => (
-        <div key={i} className="animate-pulse rounded-xl bg-[#0d1117] p-4 border border-[#1e2d45] space-y-2">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-[#1a2535]" />
-            <div className="flex-1 space-y-1.5">
-              <div className="h-3 w-32 rounded bg-[#1a2535]" />
-              <div className="h-2.5 w-20 rounded bg-[#1a2535]" />
-            </div>
-            <div className="h-4 w-24 rounded bg-[#1a2535]" />
-          </div>
-          <div className="h-2 w-full rounded-full bg-[#1a2535]" />
-        </div>
-      ))}
-    </div>
-  )
+function Skeleton({ className = '' }: { className?: string }) {
+  return <div className={`animate-pulse bg-gray-100 rounded-xl ${className}`} />
 }
 
-type ContributeForm = { goalId: string; amount: string }
+const ICONS  = ['🎯','🏠','✈️','🚗','💻','📚','💊','🎓','💰','🌟','🏖️','🎸','👶','🐕','🏋️']
+const COLORS = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899','#14b8a6','#f97316','#6366f1','#84cc16']
+const EMPTY_FORM = { name: '', target_amount: '', target_date: '', icon: '🎯', color: '#3b82f6' }
 
 export default function GoalsPage() {
-  const now = new Date()
-
-  const [goals, setGoals]         = useState<Goal[]>([])
-  const [loading, setLoading]     = useState(true)
-  const [showForm, setShowForm]   = useState(false)
-  const [submitting, setSubmitting] = useState(false)
-  const [formError, setFormError]   = useState('')
-  const [limitReached, setLimitReached] = useState(false)
-
-  const [contributeForm, setContributeForm] = useState<ContributeForm | null>(null)
-  const [contributing, setContributing]     = useState(false)
-  const [contributeError, setContributeError] = useState('')
-
-  const [form, setForm] = useState({
-    name:          '',
-    target_amount: '',
-    target_date:   '',
-    icon:          '🎯',
-    color:         '#8b5cf6',
-  })
+  const [goals, setGoals]             = useState<Goal[]>([])
+  const [isLoading, setIsLoading]     = useState(true)
+  const [showForm, setShowForm]       = useState(false)
+  const [depositGoalId, setDepositGoalId] = useState<string | null>(null)
+  const [depositAmount, setDepositAmount] = useState('')
+  const [form, setForm]               = useState(EMPTY_FORM)
+  const [saving, setSaving]           = useState(false)
+  const { addToast } = useFinanceStore()
 
   const fetchGoals = useCallback(async () => {
-    setLoading(true)
-    try {
-      const res  = await fetch('/api/goals')
-      const json = await res.json() as { goals?: Goal[] }
-      setGoals(json.goals ?? [])
-    } finally {
-      setLoading(false)
-    }
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+    const { data } = await supabase.from('goals').select('*').eq('user_id', user.id)
+      .order('status').order('created_at', { ascending: false })
+    setGoals(data ?? [])
+    setIsLoading(false)
   }, [])
 
   useEffect(() => { fetchGoals() }, [fetchGoals])
 
+  const activeGoals    = goals.filter(g => g.status === 'active')
+  const completedGoals = goals.filter(g => g.status === 'completed')
+  const totalSaved     = activeGoals.reduce((s, g) => s + g.current_amount, 0)
+  const totalTarget    = activeGoals.reduce((s, g) => s + g.target_amount, 0)
+  const overallPct     = totalTarget > 0 ? Math.round((totalSaved / totalTarget) * 100) : 0
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!form.name || !form.target_amount || !form.target_date) {
-      setFormError('Completa todos los campos requeridos.')
-      return
-    }
-    setSubmitting(true)
-    setFormError('')
-    const res = await fetch('/api/goals', {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        name:          form.name,
-        target_amount: parseFloat(form.target_amount),
-        target_date:   form.target_date,
-        icon:          form.icon,
-        color:         form.color,
-      }),
+    setSaving(true)
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+    const { error } = await supabase.from('goals').insert({
+      user_id: user.id, name: form.name,
+      target_amount: Number(form.target_amount), current_amount: 0,
+      target_date: form.target_date, icon: form.icon, color: form.color, status: 'active',
     })
-    const json = await res.json() as { goal?: Goal; error?: string; limit?: number }
-    if (!res.ok) {
-      if (json.error === 'limit_reached') {
-        setLimitReached(true)
-        setShowForm(false)
-      } else {
-        setFormError(json.error ?? 'Error al guardar.')
-      }
-      setSubmitting(false)
-      return
+    if (error) addToast('Error al crear la meta', 'error')
+    else {
+      addToast('Meta creada ✓')
+      setForm(EMPTY_FORM)
+      setShowForm(false)
+      fetchGoals()
     }
-    setGoals(prev => [...prev, json.goal!])
-    setShowForm(false)
-    setForm({ name: '', target_amount: '', target_date: '', icon: '🎯', color: '#8b5cf6' })
-    setSubmitting(false)
+    setSaving(false)
   }
 
-  const handleContribute = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!contributeForm || !contributeForm.amount) {
-      setContributeError('Ingresa un monto.')
-      return
+  const handleDeposit = async (goal: Goal) => {
+    if (!depositAmount || Number(depositAmount) <= 0) return
+    const supabase = createClient()
+    const newAmount = goal.current_amount + Number(depositAmount)
+    const newStatus = newAmount >= goal.target_amount ? 'completed' : 'active'
+    const { error } = await supabase.from('goals').update({
+      current_amount: newAmount, status: newStatus, updated_at: new Date().toISOString(),
+    }).eq('id', goal.id)
+    if (!error) {
+      addToast(newStatus === 'completed' ? `¡Meta "${goal.name}" completada! 🎉` : `Depósito de ${formatCurrency(Number(depositAmount))} registrado ✓`)
+      setDepositAmount('')
+      setDepositGoalId(null)
+      fetchGoals()
     }
-    setContributing(true)
-    setContributeError('')
-    const res = await fetch(`/api/goals/${contributeForm.goalId}`, {
-      method:  'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ amount: parseFloat(contributeForm.amount) }),
-    })
-    const json = await res.json() as { goal?: Goal; error?: string }
-    if (!res.ok) {
-      setContributeError(json.error ?? 'Error al registrar aporte.')
-      setContributing(false)
-      return
-    }
-    setGoals(prev => prev.map(g => g.id === json.goal!.id ? json.goal! : g))
-    setContributeForm(null)
-    setContributing(false)
   }
 
-  const progressPct = (goal: Goal) =>
-    Math.min(100, goal.target_amount > 0 ? Math.round((goal.current_amount / goal.target_amount) * 100) : 0)
+  const handleDelete = async (id: string) => {
+    const supabase = createClient()
+    await supabase.from('goals').delete().eq('id', id)
+    addToast('Meta eliminada')
+    fetchGoals()
+  }
 
   return (
-    <div className="flex flex-col gap-5">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-extrabold text-white">Metas</h1>
-        {!limitReached ? (
-          <button
-            onClick={() => setShowForm(v => !v)}
-            className="rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-blue-500"
-          >
-            {showForm ? 'Cancelar' : '+ Nueva meta'}
-          </button>
-        ) : null}
+    <div className="p-10 max-w-7xl mx-auto">
+
+      {/* ── HEADER ─────────────────────────────────────────────── */}
+      <div className="flex items-start justify-between mb-8">
+        <div>
+          <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight">Metas de ahorro</h1>
+          <p className="text-sm text-gray-500 mt-1">
+            {activeGoals.length} meta{activeGoals.length !== 1 ? 's' : ''} activa{activeGoals.length !== 1 ? 's' : ''}
+            {totalTarget > 0 && ` · ${overallPct}% del total`}
+          </p>
+        </div>
+        <button
+          onClick={() => setShowForm(v => !v)}
+          className="inline-flex items-center gap-2 text-sm font-semibold text-white px-4 py-2 rounded-lg transition-opacity hover:opacity-90"
+          style={{ background: 'linear-gradient(135deg, #3B82F6, #2563EB)', boxShadow: '0 2px 8px rgba(59,130,246,0.3)' }}
+        >
+          + Nueva meta
+        </button>
       </div>
 
-      {/* Paywall if limit reached */}
-      {limitReached && (
-        <PaywallGate featureKey={FEATURE_KEYS.MAX_GOALS}>
-          <></>
-        </PaywallGate>
+      {/* ── KPI ROW ────────────────────────────────────────────── */}
+      <div className="grid grid-cols-3 gap-4 mb-6">
+        <div className="bg-white rounded-xl border border-gray-200 p-5"
+          style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+          <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Total ahorrado</p>
+          <p className="text-2xl font-extrabold tracking-tight text-blue-500 mb-1">{formatCurrency(totalSaved)}</p>
+          <p className="text-xs text-gray-400">de {formatCurrency(totalTarget)} objetivo</p>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-200 p-5"
+          style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+          <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Metas activas</p>
+          <p className="text-2xl font-extrabold tracking-tight text-gray-900 mb-1">{activeGoals.length}</p>
+          <p className="text-xs text-gray-400">en progreso</p>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-200 p-5"
+          style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+          <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Metas completadas</p>
+          <p className="text-2xl font-extrabold tracking-tight text-emerald-600 mb-1">{completedGoals.length}</p>
+          <p className="text-xs text-gray-400">{completedGoals.length > 0 ? '¡Buen trabajo! 🎉' : 'Aún ninguna'}</p>
+        </div>
+      </div>
+
+      {/* ── ADD FORM ───────────────────────────────────────────── */}
+      {showForm && (
+        <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6"
+          style={{ boxShadow: '0 4px 16px rgba(0,0,0,0.06)' }}>
+          <div className="flex items-center justify-between mb-5">
+            <div>
+              <h2 className="text-base font-bold text-gray-900">Nueva meta de ahorro</h2>
+              <p className="text-xs text-gray-400 mt-0.5">Define tu objetivo y empieza a ahorrar</p>
+            </div>
+            <button onClick={() => setShowForm(false)}
+              className="text-gray-400 hover:text-gray-600 transition-colors text-xl leading-none">×</button>
+          </div>
+          <form onSubmit={handleSubmit}>
+            <div className="grid grid-cols-2 gap-4 mb-5">
+              <div className="col-span-2">
+                <label className="block text-xs font-semibold text-gray-500 mb-1.5">Nombre de la meta *</label>
+                <input
+                  value={form.name}
+                  onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                  required placeholder="Ej: Fondo de emergencia, Viaje a Europa..." autoFocus
+                  className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-lg bg-white text-gray-900 focus:outline-none focus:border-blue-400 transition-colors"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 mb-1.5">Monto objetivo (CLP) *</label>
+                <input
+                  type="number" value={form.target_amount}
+                  onChange={e => setForm(f => ({ ...f, target_amount: e.target.value }))}
+                  required min="1" placeholder="2.000.000"
+                  className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-lg bg-white text-gray-900 focus:outline-none focus:border-blue-400 transition-colors"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 mb-1.5">Fecha objetivo *</label>
+                <input
+                  type="date" value={form.target_date}
+                  onChange={e => setForm(f => ({ ...f, target_date: e.target.value }))}
+                  required
+                  className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-lg bg-white text-gray-900 focus:outline-none focus:border-blue-400 transition-colors"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 mb-1.5">Ícono</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {ICONS.map(icon => (
+                    <button key={icon} type="button"
+                      onClick={() => setForm(f => ({ ...f, icon }))}
+                      className="text-lg p-1.5 rounded-lg transition-all"
+                      style={{
+                        border: `2px solid ${form.icon === icon ? '#3B82F6' : 'transparent'}`,
+                        backgroundColor: form.icon === icon ? '#EFF6FF' : 'transparent',
+                      }}>
+                      {icon}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 mb-1.5">Color</label>
+                <div className="flex flex-wrap gap-2">
+                  {COLORS.map(color => (
+                    <button key={color} type="button"
+                      onClick={() => setForm(f => ({ ...f, color }))}
+                      className="w-7 h-7 rounded-full border-2 transition-transform"
+                      style={{
+                        backgroundColor: color,
+                        borderColor: form.color === color ? color : 'transparent',
+                        outline: form.color === color ? `2px solid ${color}` : 'none',
+                        outlineOffset: 2,
+                        transform: form.color === color ? 'scale(1.15)' : 'scale(1)',
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3">
+              <button type="button" onClick={() => setShowForm(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                Cancelar
+              </button>
+              <button type="submit" disabled={saving}
+                className="px-5 py-2 text-sm font-semibold text-white rounded-lg transition-opacity disabled:opacity-60"
+                style={{ background: 'linear-gradient(135deg, #3B82F6, #2563EB)' }}>
+                {saving ? 'Creando...' : 'Crear meta'}
+              </button>
+            </div>
+          </form>
+        </div>
       )}
 
-      {/* Add form */}
-      {showForm && !limitReached && (
-        <form
-          onSubmit={handleSubmit}
-          className="rounded-2xl border border-[#1e2d45] bg-[#0d1117] p-5 space-y-3"
-        >
-          <p className="text-sm font-semibold text-white mb-1">Nueva meta</p>
-          {formError && <p className="text-xs text-red-400">{formError}</p>}
-          <div>
-            <label className="block text-[11px] text-slate-500 mb-1">Nombre *</label>
-            <input
-              type="text"
-              value={form.name}
-              onChange={(e) => setForm(f => ({ ...f, name: e.target.value }))}
-              className="w-full rounded-xl border border-[#1e2d45] bg-[#111827] px-3 py-2 text-xs text-white placeholder-slate-600 focus:border-blue-500 focus:outline-none"
-              placeholder="Ej: Fondo de emergencia"
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-[11px] text-slate-500 mb-1">Monto objetivo (CLP) *</label>
-              <input
-                type="number"
-                min="1"
-                value={form.target_amount}
-                onChange={(e) => setForm(f => ({ ...f, target_amount: e.target.value }))}
-                className="w-full rounded-xl border border-[#1e2d45] bg-[#111827] px-3 py-2 text-xs text-white placeholder-slate-600 focus:border-blue-500 focus:outline-none"
-                placeholder="1000000"
-              />
-            </div>
-            <div>
-              <label className="block text-[11px] text-slate-500 mb-1">Fecha límite *</label>
-              <input
-                type="date"
-                value={form.target_date}
-                min={now.toISOString().split('T')[0]}
-                onChange={(e) => setForm(f => ({ ...f, target_date: e.target.value }))}
-                className="w-full rounded-xl border border-[#1e2d45] bg-[#111827] px-3 py-2 text-xs text-white focus:border-blue-500 focus:outline-none"
-              />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-[11px] text-slate-500 mb-1">Ícono</label>
-              <input
-                type="text"
-                value={form.icon}
-                onChange={(e) => setForm(f => ({ ...f, icon: e.target.value }))}
-                className="w-full rounded-xl border border-[#1e2d45] bg-[#111827] px-3 py-2 text-xs text-white focus:border-blue-500 focus:outline-none"
-                placeholder="🎯"
-              />
-            </div>
-            <div>
-              <label className="block text-[11px] text-slate-500 mb-1">Color</label>
-              <input
-                type="color"
-                value={form.color}
-                onChange={(e) => setForm(f => ({ ...f, color: e.target.value }))}
-                className="w-full h-[34px] rounded-xl border border-[#1e2d45] bg-[#111827] px-1 py-0.5 focus:border-blue-500 focus:outline-none cursor-pointer"
-              />
-            </div>
-          </div>
-          <div className="flex gap-2 pt-1">
-            <button
-              type="button"
-              onClick={() => { setShowForm(false); setFormError('') }}
-              className="flex-1 rounded-xl border border-[#1e2d45] py-2 text-xs text-slate-400 hover:text-white transition"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={submitting}
-              className="flex-1 rounded-xl bg-violet-600 py-2 text-xs font-semibold text-white hover:bg-violet-500 transition disabled:opacity-50"
-            >
-              {submitting ? 'Guardando…' : 'Crear meta'}
-            </button>
-          </div>
-        </form>
-      )}
-
-      {/* Contribute form */}
-      {contributeForm && (
-        <form
-          onSubmit={handleContribute}
-          className="rounded-2xl border border-[#1e2d45] bg-[#0d1117] p-5 space-y-3"
-        >
-          <p className="text-sm font-semibold text-white mb-1">Registrar aporte</p>
-          {contributeError && <p className="text-xs text-red-400">{contributeError}</p>}
-          <div>
-            <label className="block text-[11px] text-slate-500 mb-1">Monto (CLP) *</label>
-            <input
-              type="number"
-              min="1"
-              value={contributeForm.amount}
-              onChange={(e) => setContributeForm(f => f ? { ...f, amount: e.target.value } : null)}
-              className="w-full rounded-xl border border-[#1e2d45] bg-[#111827] px-3 py-2 text-xs text-white placeholder-slate-600 focus:border-blue-500 focus:outline-none"
-              placeholder="50000"
-            />
-          </div>
-          <div className="flex gap-2 pt-1">
-            <button
-              type="button"
-              onClick={() => { setContributeForm(null); setContributeError('') }}
-              className="flex-1 rounded-xl border border-[#1e2d45] py-2 text-xs text-slate-400 hover:text-white transition"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={contributing}
-              className="flex-1 rounded-xl bg-emerald-600 py-2 text-xs font-semibold text-white hover:bg-emerald-500 transition disabled:opacity-50"
-            >
-              {contributing ? 'Guardando…' : 'Registrar aporte'}
-            </button>
-          </div>
-        </form>
-      )}
-
-      {/* List */}
-      {loading ? (
-        <Skeleton />
+      {/* ── GOALS GRID ─────────────────────────────────────────── */}
+      {isLoading ? (
+        <div className="grid grid-cols-2 gap-5">
+          {[1,2,3,4].map(i => <Skeleton key={i} className="h-56" />)}
+        </div>
       ) : goals.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-2xl border border-[#1e2d45] bg-[#0d1117] py-14 text-center">
-          <p className="text-2xl mb-2">🎯</p>
-          <p className="text-sm text-slate-500">Sin metas activas</p>
-          {!limitReached && (
-            <button
-              onClick={() => setShowForm(true)}
-              className="mt-3 text-xs text-blue-400 hover:text-blue-300 transition underline"
-            >
-              Crear la primera
-            </button>
-          )}
+        <div className="bg-white rounded-2xl border border-gray-200 py-20 text-center"
+          style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
+          <p className="text-5xl mb-4">🎯</p>
+          <p className="text-base font-bold text-gray-700 mb-1">Define tu primer objetivo</p>
+          <p className="text-sm text-gray-400 mb-6 max-w-sm mx-auto">
+            Del sueño al plan concreto. Crea una meta, deposita ahorros y ve tu progreso crecer.
+          </p>
+          <button onClick={() => setShowForm(true)}
+            className="inline-flex items-center gap-2 text-sm font-semibold text-white px-5 py-2.5 rounded-lg"
+            style={{ background: 'linear-gradient(135deg, #3B82F6, #2563EB)' }}>
+            + Crear primera meta
+          </button>
         </div>
       ) : (
-        <div className="space-y-3">
-          {goals.map((goal) => {
-            const pct = progressPct(goal)
+        <div className="grid grid-cols-2 gap-5">
+          {goals.map(goal => {
+            const progress    = calculatePercentage(goal.current_amount, goal.target_amount)
+            const isCompleted = goal.status === 'completed'
+            const daysLeft    = goal.target_date
+              ? Math.ceil((new Date(goal.target_date + 'T00:00:00').getTime() - Date.now()) / 86400000)
+              : null
+            const isDepositing = depositGoalId === goal.id
+
             return (
-              <div
-                key={goal.id}
-                className="rounded-xl border border-[#1e2d45] bg-[#0d1117] px-4 py-4 space-y-3"
-              >
-                <div className="flex items-center gap-3">
-                  <div
-                    className="w-9 h-9 rounded-full flex items-center justify-center text-lg flex-shrink-0"
-                    style={{ backgroundColor: `${goal.color}22` }}
-                  >
+              <div key={goal.id}
+                className="bg-white rounded-2xl border p-6 relative transition-shadow hover:shadow-md"
+                style={{
+                  borderColor: isCompleted ? '#A7F3D0' : '#E5E7EB',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+                }}>
+
+                {/* Completed badge */}
+                {isCompleted && (
+                  <span className="absolute top-4 right-4 text-xs font-bold px-2.5 py-1 rounded-full"
+                    style={{ backgroundColor: '#ECFDF5', color: '#10B981', border: '1px solid #A7F3D0' }}>
+                    ✓ Completada
+                  </span>
+                )}
+
+                {/* Header */}
+                <div className="flex items-start gap-4 mb-5">
+                  <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-2xl shrink-0"
+                    style={{ backgroundColor: goal.color + '18' }}>
                     {goal.icon}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-semibold text-white truncate">{goal.name}</p>
-                    <p className="text-[11px] text-slate-600">
-                      Vence {formatDate(goal.target_date)}
+                    <h3 className="text-base font-bold text-gray-900 truncate pr-16">{goal.name}</h3>
+                    {!isCompleted && (
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        {formatDate(goal.target_date)}
+                        {daysLeft !== null && daysLeft > 0 && (
+                          <span style={{ color: daysLeft <= 30 ? '#F59E0B' : '#9CA3AF' }}>
+                            {' '}· {daysLeft} días restantes
+                          </span>
+                        )}
+                        {daysLeft !== null && daysLeft <= 0 && (
+                          <span className="text-red-400"> · ¡Vencida!</span>
+                        )}
+                      </p>
+                    )}
+                  </div>
+                  {!isCompleted && (
+                    <button onClick={() => handleDelete(goal.id)}
+                      className="absolute top-4 right-4 text-gray-300 hover:text-red-400 transition-colors text-sm p-1.5 rounded-lg hover:bg-red-50">
+                      ✕
+                    </button>
+                  )}
+                </div>
+
+                {/* Amounts */}
+                <div className="flex items-end justify-between mb-3">
+                  <div>
+                    <p className="text-xs text-gray-400 mb-0.5">Ahorrado</p>
+                    <p className="text-xl font-extrabold tracking-tight text-gray-900">
+                      {formatCurrency(goal.current_amount)}
                     </p>
                   </div>
-                  <div className="text-right flex-shrink-0">
-                    <p className="text-xs font-bold text-white">{formatCurrency(goal.current_amount)}</p>
-                    <p className="text-[11px] text-slate-600">de {formatCurrency(goal.target_amount)}</p>
+                  <div className="text-right">
+                    <p className="text-xs text-gray-400 mb-0.5">Meta</p>
+                    <p className="text-base font-bold text-gray-400">{formatCurrency(goal.target_amount)}</p>
                   </div>
                 </div>
 
                 {/* Progress bar */}
-                <div className="space-y-1">
-                  <div className="h-2 w-full rounded-full bg-[#1a2535] overflow-hidden">
-                    <div
-                      className="h-full rounded-full transition-all"
-                      style={{ width: `${pct}%`, backgroundColor: goal.color }}
-                    />
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-[10px] text-slate-600">{pct}% completado</span>
-                    {pct >= 100 && <span className="text-[10px] text-emerald-500 font-medium">Completada</span>}
-                  </div>
+                <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden mb-2">
+                  <div className="h-full rounded-full transition-all duration-700"
+                    style={{
+                      width: `${Math.min(progress, 100)}%`,
+                      backgroundColor: isCompleted ? '#10B981' : goal.color,
+                    }} />
                 </div>
+                <p className="text-xs text-gray-400 mb-4">
+                  <span className="font-semibold" style={{ color: goal.color }}>{progress}%</span>
+                  {' '}completado · Faltan{' '}
+                  <span className="font-medium text-gray-600">{formatCurrency(Math.max(goal.target_amount - goal.current_amount, 0))}</span>
+                </p>
 
-                {pct < 100 && (
-                  <button
-                    onClick={() => {
-                      setContributeForm({ goalId: goal.id, amount: '' })
-                      setContributeError('')
-                    }}
-                    className="w-full rounded-xl border border-[#1e2d45] py-1.5 text-[11px] text-slate-400 hover:text-white hover:border-slate-600 transition"
-                  >
-                    + Registrar aporte
-                  </button>
+                {/* Deposit action */}
+                {!isCompleted && (
+                  isDepositing ? (
+                    <div className="flex gap-2">
+                      <input
+                        type="number" value={depositAmount}
+                        onChange={e => setDepositAmount(e.target.value)}
+                        placeholder="Monto a depositar" autoFocus
+                        className="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white text-gray-900 focus:outline-none focus:border-blue-400 transition-colors"
+                      />
+                      <button onClick={() => handleDeposit(goal)}
+                        className="px-3 py-2 text-sm font-semibold text-white rounded-lg shrink-0"
+                        style={{ backgroundColor: goal.color }}>
+                        Depositar
+                      </button>
+                      <button onClick={() => { setDepositGoalId(null); setDepositAmount('') }}
+                        className="px-2 py-2 text-sm text-gray-400 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                        ✕
+                      </button>
+                    </div>
+                  ) : (
+                    <button onClick={() => setDepositGoalId(goal.id)}
+                      className="w-full py-2.5 text-sm font-semibold rounded-xl transition-colors"
+                      style={{
+                        color: goal.color,
+                        border: `1.5px solid ${goal.color}40`,
+                        backgroundColor: goal.color + '08',
+                      }}
+                      onMouseEnter={e => (e.currentTarget.style.backgroundColor = goal.color + '14')}
+                      onMouseLeave={e => (e.currentTarget.style.backgroundColor = goal.color + '08')}
+                    >
+                      + Depositar ahorro
+                    </button>
+                  )
                 )}
               </div>
             )

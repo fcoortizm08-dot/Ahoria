@@ -1,41 +1,113 @@
-export default function AuthLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+import { AhIconInline } from '@/components/ui/ah-logo'
+
+const FEATURES = [
+  { icon: '📊', title: 'Pulso financiero en tiempo real',  desc: 'Tu salud financiera de un vistazo' },
+  { icon: '💸', title: 'Control de ingresos y gastos',     desc: 'Registra en 3 toques, sin complicaciones' },
+  { icon: '🎯', title: 'Metas de ahorro con progreso',     desc: 'Del sueño al plan concreto' },
+  { icon: '✦',  title: 'Asistente IA incluido',            desc: 'Análisis, consejos y proyecciones' },
+]
+
+export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen bg-[#07090f] flex">
-      <div className="hidden lg:flex lg:w-1/2 bg-[#0d1117] border-r border-[#1e2d45] flex-col justify-between p-12">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-sm">
-            A
+    <div style={{ minHeight: '100vh', display: 'flex', backgroundColor: '#FFFFFF' }}>
+
+      {/* ── LEFT PANEL — desktop only ───────────────────────────── */}
+      <div
+        className="hidden lg:flex lg:w-[480px] flex-col justify-between"
+        style={{ padding: '48px', backgroundColor: '#F7F9F7', borderRight: '1px solid #E5E7EB' }}
+      >
+        {/* Logo — real SVG icon + wordmark */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <AhIconInline size={40} />
+          <div>
+            <div style={{
+              fontSize: '20px', fontWeight: 800, letterSpacing: '-0.4px',
+              color: '#1F2937', lineHeight: 1,
+            }}>
+              AHORIA
+            </div>
+            <div style={{ fontSize: '11px', color: '#6B7280', marginTop: '2px' }}>
+              Finanzas personales inteligentes
+            </div>
           </div>
-          <span className="text-white font-bold text-base">
-            Ahoria
-          </span>
         </div>
+
+        {/* Central copy */}
         <div>
-          <h1 className="text-4xl font-extrabold text-white leading-tight tracking-tight mb-4">
-            Tus finanzas,<br />
-            <span className="text-blue-400">claras.</span>
+          {/* Live badge */}
+          <div style={{
+            display: 'inline-flex', alignItems: 'center', gap: '8px',
+            backgroundColor: '#EFF6FF', border: '1px solid #BFDBFE',
+            borderRadius: '999px', padding: '5px 12px', marginBottom: '28px',
+          }}>
+            <div style={{
+              width: '6px', height: '6px', borderRadius: '999px',
+              backgroundColor: '#4A90E2',
+            }} />
+            <span style={{ fontSize: '12px', fontWeight: 600, color: '#2563EB' }}>
+              Tu dinero, en orden
+            </span>
+          </div>
+
+          <h1 style={{
+            fontSize: '38px', fontWeight: 900, lineHeight: 1.15,
+            letterSpacing: '-1px', marginBottom: '16px', color: '#1F2937',
+            margin: '0 0 16px',
+          }}>
+            Ahorra ahora.<br />
+            <span style={{ color: '#5DBB63' }}>Vive mejor.</span>
           </h1>
-          <p className="text-slate-400 text-base leading-relaxed mb-8">
+
+          <p style={{
+            fontSize: '15px', lineHeight: 1.75, color: '#6B7280',
+            marginBottom: '36px', margin: '0 0 36px',
+          }}>
             Entiende tu situación financiera en menos de 1 minuto
-            y toma mejores decisiones sin depender de planillas complejas.
+            y toma mejores decisiones, todos los días.
           </p>
-          <div className="flex flex-col gap-3">
-            {[
-              '✓ Dashboard financiero en tiempo real',
-              '✓ Control de ingresos, gastos y deudas',
-              '✓ Metas de ahorro con progreso visual',
-            ].map(item => (
-              <div key={item} className="text-sm text-slate-400">{item}</div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            {FEATURES.map(f => (
+              <div key={f.title} style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                <div style={{
+                  width: '34px', height: '34px', borderRadius: '9px',
+                  backgroundColor: '#FFFFFF', border: '1px solid #E5E7EB',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: '16px', flexShrink: 0,
+                }}>
+                  {f.icon}
+                </div>
+                <div>
+                  <div style={{ fontSize: '13px', fontWeight: 700, color: '#1F2937' }}>{f.title}</div>
+                  <div style={{ fontSize: '12px', color: '#6B7280', marginTop: '1px' }}>{f.desc}</div>
+                </div>
+              </div>
             ))}
           </div>
         </div>
-        <p className="text-xs text-slate-600">© 2025 Ahoria.</p>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <AhIconInline size={20} />
+          <p style={{ fontSize: '11px', color: '#9CA3AF', margin: 0 }}>
+            © 2026 AHORIA · Finanzas personales inteligentes
+          </p>
+        </div>
       </div>
-      <div className="flex-1 flex items-center justify-center p-6">
+
+      {/* ── RIGHT PANEL — form ──────────────────────────────────── */}
+      <div style={{
+        flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: '40px 24px',
+      }}>
+        {/* Mobile logo — only visible on small screens */}
+        <div className="lg:hidden absolute top-6 left-6"
+          style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <AhIconInline size={28} />
+          <span style={{ fontSize: '16px', fontWeight: 800, color: '#1F2937', letterSpacing: '-0.3px' }}>
+            AHORIA
+          </span>
+        </div>
         {children}
       </div>
     </div>
