@@ -87,19 +87,6 @@ export default function RegisterPage() {
 
   return (
     <div style={{ width: '100%', maxWidth: '380px' }}>
-      {/* Mobile logo */}
-      <div className="flex items-center gap-2.5 mb-8 lg:hidden">
-        <div style={{
-          width: '34px', height: '34px', borderRadius: '10px',
-          background: 'linear-gradient(135deg, #10B981, #059669)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          color: '#FFFFFF', fontWeight: 800, fontSize: '16px',
-        }}>A</div>
-        <span style={{ fontSize: '18px', fontWeight: 800, color: C.text }}>
-          AHO<span style={{ color: C.green }}>RIA</span>
-        </span>
-      </div>
-
       <div style={{ marginBottom: '28px' }}>
         <h2 style={{ fontSize: '26px', fontWeight: 800, color: C.text, letterSpacing: '-0.5px', margin: '0 0 6px' }}>
           Crea tu cuenta
