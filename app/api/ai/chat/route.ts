@@ -1,10 +1,10 @@
-import Anthropic from '@anthropic-ai/sdk'
+import Groq from 'groq-sdk'
 import { createClient } from '@/lib/supabase/server'
 import { buildFinancialContext, buildSystemPrompt } from '@/lib/ai/buildFinancialContext'
 import { NextRequest } from 'next/server'
 
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY ?? '',
+const groq = new Groq({
+  apiKey: process.env.GROQ_API_KEY ?? '',
 })
 
 export async function POST(req: NextRequest) {
@@ -23,9 +23,9 @@ export async function POST(req: NextRequest) {
       .eq('id', user.id)
       .single()
 
-    const isPremium      = profile?.is_premium ?? false
-    const messagesUsed   = profile?.ai_messages_used ?? 0
-    const messagesLimit  = isPremium ? 999 : (profile?.ai_messages_limit ?? 5)
+    const isPremium    = profile?.is_premium ?? false
+    const messagesUsed = profile?.ai_messages_used ?? 0
+    const messagesLimit = isPremium ? 999 : (profile?.ai_messages_limit ?? 5)
 
     if (!isPremium && messagesUsed >= messagesLimit) {
       return Response.json({
@@ -43,26 +43,27 @@ export async function POST(req: NextRequest) {
       return Response.json({ error: 'Mensaje vacío' }, { status: 400 })
     }
 
-    // Limitar historial a últimos 10 mensajes para controlar tokens
     const recentMessages = messages.slice(-10)
 
     // ── 4. Construir contexto financiero ─────────────────────────────────────
     const financialCtx = await buildFinancialContext(user.id)
     const systemPrompt = buildSystemPrompt(financialCtx)
 
-    // ── 5. Llamar a Claude — respuesta completa (más confiable que streaming) ─
+    // ── 5. Llamar a Groq ─────────────────────────────────────────────────────
     let aiText: string
     try {
-      const response = await anthropic.messages.create({
-        model: isPremium ? 'claude-sonnet-4-5-20250929' : 'claude-haiku-4-5-20251001',
+      const response = await groq.chat.completions.create({
+        model: isPremium ? 'llama-3.3-70b-versatile' : 'llama-3.1-8b-instant',
         max_tokens: isPremium ? 1500 : 800,
-        system: systemPrompt,
-        messages: recentMessages,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          ...recentMessages,
+        ],
       })
-      aiText = response.content[0].type === 'text' ? response.content[0].text : ''
+      aiText = response.choices[0]?.message?.content ?? ''
     } catch (aiErr: unknown) {
       const msg = aiErr instanceof Error ? aiErr.message : 'Error al conectar con IA'
-      console.error('[Anthropic Error]', msg)
+      console.error('[Groq Error]', msg)
       return Response.json({ error: msg }, { status: 502 })
     }
 
@@ -74,7 +75,7 @@ export async function POST(req: NextRequest) {
         .eq('id', user.id)
     }
 
-    // ── 7. Devolver respuesta (el cliente la lee como stream) ─────────────────
+    // ── 7. Devolver respuesta ─────────────────────────────────────────────────
     const readable = new ReadableStream({
       start(controller) {
         controller.enqueue(new TextEncoder().encode(aiText))
@@ -86,7 +87,7 @@ export async function POST(req: NextRequest) {
       headers: {
         'Content-Type': 'text/plain; charset=utf-8',
         'Cache-Control': 'no-cache',
-        'X-AI-Model': isPremium ? 'sonnet' : 'haiku',
+        'X-AI-Model': isPremium ? 'llama-70b' : 'llama-8b',
         'X-Messages-Used': String(messagesUsed + 1),
         'X-Messages-Limit': String(messagesLimit),
         'X-Is-Premium': String(isPremium),
