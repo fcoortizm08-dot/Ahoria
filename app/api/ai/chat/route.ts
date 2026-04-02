@@ -50,13 +50,21 @@ export async function POST(req: NextRequest) {
     const financialCtx = await buildFinancialContext(user.id)
     const systemPrompt = buildSystemPrompt(financialCtx)
 
-    // ── 5. Llamar a Claude (streaming) ───────────────────────────────────────
-    const stream = anthropic.messages.stream({
-      model: isPremium ? 'claude-sonnet-4-5-20250929' : 'claude-haiku-4-5-20251001',
-      max_tokens: isPremium ? 1500 : 800,
-      system: systemPrompt,
-      messages: recentMessages,
-    })
+    // ── 5. Llamar a Claude — respuesta completa (más confiable que streaming) ─
+    let aiText: string
+    try {
+      const response = await anthropic.messages.create({
+        model: isPremium ? 'claude-sonnet-4-5-20250929' : 'claude-haiku-4-5-20251001',
+        max_tokens: isPremium ? 1500 : 800,
+        system: systemPrompt,
+        messages: recentMessages,
+      })
+      aiText = response.content[0].type === 'text' ? response.content[0].text : ''
+    } catch (aiErr: unknown) {
+      const msg = aiErr instanceof Error ? aiErr.message : 'Error al conectar con IA'
+      console.error('[Anthropic Error]', msg)
+      return Response.json({ error: msg }, { status: 502 })
+    }
 
     // ── 6. Incrementar contador de mensajes ──────────────────────────────────
     if (!isPremium) {
@@ -66,22 +74,11 @@ export async function POST(req: NextRequest) {
         .eq('id', user.id)
     }
 
-    // ── 7. Hacer streaming de la respuesta ───────────────────────────────────
+    // ── 7. Devolver respuesta (el cliente la lee como stream) ─────────────────
     const readable = new ReadableStream({
-      async start(controller) {
-        const encoder = new TextEncoder()
-        try {
-          for await (const chunk of stream) {
-            if (
-              chunk.type === 'content_block_delta' &&
-              chunk.delta.type === 'text_delta'
-            ) {
-              controller.enqueue(encoder.encode(chunk.delta.text))
-            }
-          }
-        } finally {
-          controller.close()
-        }
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(aiText))
+        controller.close()
       },
     })
 
