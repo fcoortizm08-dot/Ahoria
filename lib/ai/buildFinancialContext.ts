@@ -55,7 +55,7 @@ export async function buildFinancialContext(userId: string): Promise<FinancialCo
       .select('name, icon, target_amount, current_amount, target_date')
       .eq('user_id', userId).eq('status', 'active'),
     supabase.from('streaks')
-      .select('current_streak').eq('user_id', userId).maybeSingle(),
+      .select('current').eq('user_id', userId).maybeSingle(),
   ])
 
   const txs = allTxs ?? []
@@ -128,7 +128,7 @@ export async function buildFinancialContext(userId: string): Promise<FinancialCo
     last3Months,
     debts: debtList,
     goals: goalList,
-    streak: streak?.current_streak ?? 0,
+    streak: streak?.current ?? 0,
     totalDebt,
     netWorthEstimate,
   }
