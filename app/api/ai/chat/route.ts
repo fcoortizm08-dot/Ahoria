@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
 
     // ── 5. Llamar a Claude (streaming) ───────────────────────────────────────
     const stream = anthropic.messages.stream({
-      model: isPremium ? 'claude-sonnet-4-5' : 'claude-haiku-4-5',
+      model: isPremium ? 'claude-sonnet-4-5-20250929' : 'claude-haiku-4-5-20251001',
       max_tokens: isPremium ? 1500 : 800,
       system: systemPrompt,
       messages: recentMessages,
